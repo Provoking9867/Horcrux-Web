@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Horcrux</title>
+<style>
+:root{--ink:#1a1a18;--paper:#f5f2eb;--cream:#ede9df;--rule:#c8c3b5;
+  --accent:#2d4a3e;--red:#8b3a2a;--gold:#b8960c;
+  --mono:'Courier New',Courier,monospace;--serif:Georgia,'Times New Roman',serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:16px;line-height:1.7;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.18;
+  background-image:repeating-linear-gradient(transparent,transparent 27px,var(--rule) 27px,var(--rule) 28px)}
+.pg{position:relative;z-index:1;max-width:820px;margin:0 auto;padding:40px 36px 80px}
+.mh{border-top:3px double var(--ink);border-bottom:1px solid var(--ink);padding:16px 0 12px;
+  margin-bottom:28px;display:flex;align-items:baseline;gap:14px}
+.mh h1{font-size:26px;font-weight:normal;letter-spacing:.04em;font-variant:small-caps}
+.mh .v{font-size:12px;color:#999;font-family:var(--mono)}
+.tabs{display:flex;border-bottom:1px solid var(--rule);margin-bottom:24px;flex-wrap:wrap}
+.tab{padding:9px 20px;cursor:pointer;font-size:14px;color:#999;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s}
+.tab:hover{color:var(--ink)}.tab.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:bold}
+.pn{display:none}.pn.on{display:block}
+.fi{margin-bottom:16px}
+label{display:block;font-size:12px;color:#888;margin-bottom:4px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+input[type=text],input[type=number]{width:100%;padding:9px 11px;border:1px solid var(--rule);border-radius:2px;
+  background:var(--cream);font-family:var(--mono);font-size:13px;color:var(--ink);outline:none;transition:border-color .2s}
+input:focus{border-color:var(--accent)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.btn{padding:10px 22px;font-family:var(--serif);font-size:15px;cursor:pointer;border-radius:2px;
+  border:1.5px solid;transition:all .2s;display:inline-block}
+.p{background:var(--accent);color:#fff;border-color:var(--accent)}.p:hover:not(:disabled){background:#1e3329}
+.p:disabled{opacity:.4;cursor:not-allowed}
+.g{background:transparent;color:var(--accent);border-color:var(--accent)}.g:hover{background:#eef3f0}
+.st{padding:11px 14px;border-radius:2px;font-family:var(--mono);font-size:13px;margin-top:10px;display:none;line-height:1.5}
+.st.on{display:block}.ok{background:#edf3ef;color:var(--accent);border:1px solid #b8d4c4}
+.err{background:#f5edeb;color:var(--red);border:1px solid #dbb8b3}
+.inf{background:var(--cream);color:#555;border:1px solid var(--rule)}
+.warn{background:#faeeda;color:#633806;border:1px solid #ef9f27}
+.drop{border:1.5px dashed var(--rule);border-radius:3px;padding:20px;text-align:center;
+  cursor:pointer;background:var(--cream);color:#888;font-size:14px;position:relative;transition:all .2s}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop:hover,.drop.drag{border-color:var(--accent);color:var(--accent);background:#eef3f0}
+.drop.ld{border-color:var(--gold);color:var(--accent);background:#f5f3ec}
+.sr{display:flex;gap:7px;align-items:center;margin-bottom:7px}
+.sn{font-family:var(--mono);font-size:12px;color:#bbb;width:20px;flex-shrink:0;text-align:right}
+.si{flex:1;font-family:var(--mono);font-size:11px;padding:7px 9px;border:1px solid var(--rule);
+  border-radius:2px;background:var(--cream);color:var(--ink);outline:none}
+.si:focus{border-color:var(--accent)}.si.v{border-color:var(--gold)}.si.bad{border-color:var(--red)}
+.sc{background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:0 2px}.sc:hover{color:var(--red)}
+.dice-wrap{display:flex;gap:8px;align-items:flex-end;margin-bottom:10px}
+.di{width:90px;font-family:var(--mono);font-size:20px;padding:8px;text-align:center;
+  border:1px solid var(--rule);border-radius:2px;background:var(--cream);letter-spacing:.1em}
+.wrd{display:inline-block;padding:3px 10px;background:#edf3ef;border:1px solid #b8d4c4;
+  border-radius:2px;font-family:var(--mono);font-size:13px;color:var(--accent);margin:2px}
+.pp{font-family:var(--mono);font-size:13px;padding:12px 14px;background:var(--cream);
+  border:1px solid var(--rule);border-radius:2px;word-break:break-all;margin:10px 0}
+.card{background:var(--cream);border:1px solid var(--rule);border-radius:2px;padding:11px 13px;margin-bottom:8px}
+.card .ci{font-size:11px;color:#aaa;font-family:var(--mono);margin-bottom:3px}
+.card .cv{font-family:var(--mono);font-size:12px;word-break:break-all}
+.pw{height:4px;background:var(--cream);border:1px solid var(--rule);border-radius:2px;overflow:hidden;margin:10px 0}
+.pb{height:100%;background:var(--accent);width:0%;transition:width .3s}
+hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
+@keyframes sp{to{transform:rotate(360deg)}}
+.sp{display:inline-block;width:12px;height:12px;border:2px solid #ccc;border-top-color:var(--accent);
+  border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:5px}
+.sec-hd{font-size:15px;font-weight:bold;color:var(--accent);margin:20px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.sec-hd:first-child{margin-top:0}
+/* guide & docs */
+.land h2{font-size:20px;font-weight:normal;margin:28px 0 8px;letter-spacing:.01em}
+.land h3{font-size:15px;font-weight:bold;margin:20px 0 6px;color:var(--accent)}
+.land p,.land li{font-size:15px;color:#333;margin-bottom:8px}
+.land ul,.land ol{margin:8px 0 12px 22px}
+.land li{margin-bottom:6px}
+.land .step{display:flex;gap:14px;margin-bottom:14px;align-items:flex-start}
+.land .step-num{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--accent);color:var(--accent);
+  font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.land .step-body{flex:1}
+.land .step-body strong{display:block;margin-bottom:2px}
+.land code{font-family:var(--mono);font-size:13px;background:#e8e4db;padding:1px 5px;border-radius:2px}
+.land .note{border-left:3px solid var(--gold);padding:10px 14px;background:#faf8f3;margin:14px 0;font-size:14px}
+.land .del-box{border:1px solid var(--rule);border-radius:2px;padding:14px 16px;margin:10px 0;background:var(--cream)}
+.land .del-box h4{font-size:13px;font-family:var(--mono);font-weight:bold;margin-bottom:8px;color:#555}
+.land table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+.land th,.land td{text-align:left;padding:8px 10px;border:1px solid var(--rule);vertical-align:top}
+.land th{background:var(--cream);font-family:var(--mono);font-size:12px;color:#666;letter-spacing:.04em;text-transform:uppercase}
+.land td code{font-size:12px}
+.land .ref{background:var(--cream);border:1px solid var(--rule);border-radius:2px;padding:12px 14px;margin:10px 0}
+.land .ref h4{font-size:13px;font-family:var(--mono);font-weight:bold;color:var(--accent);margin-bottom:6px}
+</style>
+</head>
+<body>
+<div class="pg">
+<div class="mh"><h1>Horcrux</h1><span class="v">v2.0 &mdash; pure browser &mdash; no Python required</span></div>
+<div class="tabs">
+  <div class="tab on" onclick="tab('g')">Guide</div>
+  <div class="tab" onclick="tab('c')">Create Vault</div>
+  <div class="tab" onclick="tab('r')">Recover Vault</div>
+  <div class="tab" onclick="tab('d')">Technical Docs</div>
+</div>
+
+<!-- GUIDE -->
+<div class="pn on land" id="pg">
+
+  <p style="font-size:16px;color:#444;margin-bottom:4px">Horcrux lets you lock your important files inside an encrypted vault and split the key among trusted people &mdash; so that no single person can unlock it alone.</p>
+  <p style="font-size:14px;color:#888;margin-bottom:24px">Everything runs in your browser. Nothing is sent to the internet. No installation required.</p>
+
+  <h2>How it works</h2>
+  <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Choose a folder of files to protect</strong>All the files in that folder get zipped and encrypted with a secure passphrase. The original files are not changed or deleted.</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Generate a passphrase using dice</strong>You roll five physical dice five times to create a random passphrase. No one &mdash; not even you &mdash; needs to remember it.</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Split the key among trusted people</strong>The passphrase is split into &ldquo;shards&rdquo; &mdash; pieces of the key. Each person gets a USB drive with their shard. Alone, a shard is useless. Together, any <em>k</em> people can unlock the vault.</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-body"><strong>To recover: open this file and use the Recover tab</strong>Gather the required number of shard holders, combine their shards, select the encrypted vault file, and unlock.</div></div>
+
+  <div class="note">The encrypted vault file (.enc) is safe to store anywhere &mdash; cloud storage, email, a shared USB drive. Without the required number of shards it is mathematically impossible to open.</div>
+
+  <h2>Creating a vault &mdash; step by step</h2>
+  <ol>
+    <li>Click the <strong>Create Vault</strong> tab above.</li>
+    <li>Enter a <strong>Vault ID</strong> &mdash; any two characters like <code>A1</code> or <code>FF</code>. This just names the vault.</li>
+    <li>Click <em>Choose folder</em> and select the folder you want to protect.</li>
+    <li>Choose <strong>Total shards</strong> (how many USB drives to make) and <strong>Threshold</strong> (how many are needed to unlock). A common choice is 5 shards with a threshold of 3 &mdash; any 3 of the 5 people can unlock the vault.</li>
+    <li>Roll 5 physical dice five times and type each roll into the passphrase generator to build a 5-word diceware passphrase.</li>
+    <li>Click <em>Create Encrypted Vault</em>.</li>
+    <li>On Chrome or Edge: you will be asked to choose a folder &mdash; the shard directories are written there directly.</li>
+    <li>On other browsers: a zip file containing all shard folders is downloaded. Unzip it and copy each <code>Shard_N</code> folder to a separate USB drive.</li>
+  </ol>
+
+  <div class="note" style="border-left-color:var(--red);background:#faf3f2"><strong>Important:</strong> After copying each <code>Shard_N</code> folder to its USB drive, <strong>delete all copies of the shard folders from your computer</strong> &mdash; including the downloaded zip file. If the shards remain on your machine, anyone with access to it could reconstruct the passphrase and decrypt the vault, defeating the purpose of splitting the key among multiple people. See &ldquo;After distribution&rdquo; below for deletion instructions.</div>
+
+  <h2>Recovering a vault &mdash; step by step</h2>
+  <ol>
+    <li>Gather at least the required number of shard holders together.</li>
+    <li>Open this file (<code>horcrux.html</code>) in any browser. No internet needed.</li>
+    <li>Go to the <strong>Recover Vault</strong> tab.</li>
+    <li>Set the <strong>threshold</strong> and enter each person&rsquo;s shard string.</li>
+    <li>Click <strong>Combine Shards</strong> to verify the passphrase is reconstructed correctly.</li>
+    <li>Select the <code>.enc</code> vault file (from any shard holder&rsquo;s USB drive).</li>
+    <li>Click <strong>Unlock Vault</strong>. On Chrome/Edge you choose where to save; on other browsers the files download as a zip.</li>
+  </ol>
+
+  <h2>After distribution &mdash; deleting the originals</h2>
+  <p>Once you have confirmed that your vault was created correctly and each shard holder has their USB drive, you should delete the shard folders from your computer. They contain copies of the encrypted vault and are not needed locally.</p>
+  <p>Use your operating system&rsquo;s standard delete. The shard folders do <em>not</em> contain your original files &mdash; only the encrypted vault and the shard string, which is useless without the others.</p>
+
+  <div class="del-box"><h4>Windows</h4>
+  <p>Right-click the vault folder and choose <strong>Delete</strong>, then empty the Recycle Bin. For extra assurance, open PowerShell and run <code>cipher /w:C:\path\to\folder</code> to overwrite the free space.</p>
+  </div>
+  <div class="del-box"><h4>macOS</h4>
+  <p>Drag the vault folder to the Trash, then choose <strong>Empty Trash</strong> from the Finder menu.</p>
+  </div>
+  <div class="del-box"><h4>Linux</h4>
+  <p>Delete from your file manager, or from a terminal: <code>rm -rf ~/horcrux/XX</code> (replace XX with your vault ID). For extra assurance: <code>find ~/horcrux/XX -type f -exec shred -u {} \;</code></p>
+  </div>
+
+  <div class="note">Your <strong>original files are never modified</strong> by Horcrux. The encrypted vault is a separate copy. You are free to keep or delete your originals as you normally would.</div>
+
+</div>
+
+<!-- TECHNICAL DOCS -->
+<div class="pn land" id="pd">
+
+  <p style="font-size:14px;color:#888;margin-bottom:20px">Technical documentation for implementors, auditors, and the curious.</p>
+
+  <h2>Architecture</h2>
+  <p>Horcrux runs entirely in the browser. There is no server component. The HTML file, JavaScript modules, and embedded wordlist can be served statically, opened from a USB drive, or loaded via <code>file://</code>.</p>
+
+  <table>
+    <tr><th>Component</th><th>Implementation</th><th>Notes</th></tr>
+    <tr><td>AES-256-CBC</td><td>Web Crypto API (<code>SubtleCrypto</code>)</td><td>Hardware-accelerated on most platforms. OpenSSL-compatible <code>Salted__</code> header format.</td></tr>
+    <tr><td>PBKDF2</td><td>Web Crypto API</td><td>SHA-256, 100,000 iterations, derives 48 bytes (32-byte key + 16-byte IV).</td></tr>
+    <tr><td>SHA-256</td><td>Web Crypto API</td><td>Used for the vault manifest (file integrity checksums).</td></tr>
+    <tr><td>Secret Sharing</td><td>Pure JavaScript (<code>BigInt</code>)</td><td>Shamir&rsquo;s Secret Sharing Scheme over GF(2^deg). See below.</td></tr>
+    <tr><td>XTEA Diffusion</td><td>Pure JavaScript</td><td>64-bit block cipher used as a pseudo-random permutation on the secret before splitting.</td></tr>
+    <tr><td>Zip/Unzip</td><td>fflate library</td><td>DEFLATE compression. Can be vendored locally for offline use.</td></tr>
+    <tr><td>Random Numbers</td><td><code>crypto.getRandomValues()</code></td><td>OS-level CSPRNG. Used for salt generation and polynomial coefficients.</td></tr>
+    <tr><td>Diceware Wordlist</td><td>Embedded JavaScript</td><td>7,776-entry EFF Large Wordlist. See credits below.</td></tr>
+  </table>
+
+  <h2>Shamir&rsquo;s Secret Sharing Scheme</h2>
+  <p>The passphrase is split using polynomial interpolation over a finite field GF(2^deg), where <em>deg</em> is determined by the byte length of the secret (minimum 64 bits, maximum 1024 bits, always a multiple of 8).</p>
+
+  <h3>Splitting</h3>
+  <ol>
+    <li>The passphrase is encoded as UTF-8, right-justified into a <em>deg/8</em> byte buffer, and optionally diffused using 40&middot;n rounds of XTEA (for deg &ge; 64).</li>
+    <li>The diffused secret becomes the constant term (coefficient 0) of a random polynomial of degree <em>k&minus;1</em>, where <em>k</em> is the threshold.</li>
+    <li>Coefficients 1 through <em>k&minus;1</em> are generated from the OS CSPRNG.</li>
+    <li>The polynomial is evaluated at <em>x = 1, 2, &hellip;, n</em> using Horner&rsquo;s method in GF(2^deg). Each evaluation produces one shard.</li>
+  </ol>
+
+  <h3>Combining</h3>
+  <ol>
+    <li>Given <em>k</em> shard points (x<sub>i</sub>, y<sub>i</sub>), the constant term is recovered via Lagrange interpolation in GF(2^deg).</li>
+    <li>The XTEA diffusion is reversed.</li>
+    <li>The resulting bytes are decoded as UTF-8 to recover the passphrase.</li>
+  </ol>
+
+  <h3>Field arithmetic</h3>
+  <p>All arithmetic operates in GF(2^deg) using irreducible polynomials from a hardcoded table of 128 pentanomials (degree 8 through 1024). Multiplication uses the standard shift-and-XOR algorithm. Inversion uses the Extended Euclidean Algorithm with modular reduction of the Bezout cofactor.</p>
+
+  <h2>XTEA Diffusion Layer</h2>
+  <p>Before splitting, the secret bytes are permuted using a keyless XTEA block cipher. This is a <em>diffusion</em> layer, not an encryption layer &mdash; it ensures that similar secrets do not produce similar shares. The cipher operates on sliding 8-byte windows across the secret buffer, with 40&middot;n passes (where n is the byte length). The key is implicitly all zeros.</p>
+  <p>This layer is identical to the one used in ssss (B. Poettering, 2005), though the byte serialization order differs (big-endian in Horcrux, mixed-endian via GMP in ssss).</p>
+
+  <h2>Encryption Format</h2>
+  <p>The vault file uses OpenSSL&rsquo;s <code>aes-256-cbc -salt -pbkdf2 -iter 100000</code> format:</p>
+  <table>
+    <tr><th>Offset</th><th>Length</th><th>Content</th></tr>
+    <tr><td>0</td><td>8 bytes</td><td><code>Salted__</code> (ASCII magic)</td></tr>
+    <tr><td>8</td><td>8 bytes</td><td>Random salt</td></tr>
+    <tr><td>16</td><td>remainder</td><td>AES-256-CBC ciphertext (PKCS#7 padded)</td></tr>
+  </table>
+  <p>Key derivation: PBKDF2-HMAC-SHA256 with the salt, 100,000 iterations, producing 48 bytes. The first 32 bytes are the AES key; the last 16 bytes are the CBC initialization vector.</p>
+
+  <h2>Shard String Format</h2>
+  <p>Each shard is a string of the form:</p>
+  <p style="font-family:var(--mono);font-size:14px;padding:8px 12px;background:var(--cream);border:1px solid var(--rule);border-radius:2px"><em>VaultID</em>-<em>N</em>-<em>HEX</em></p>
+  <p>Where <em>VaultID</em> is the user-chosen identifier, <em>N</em> is the shard number (1-based), and <em>HEX</em> is the uppercase hexadecimal representation of the polynomial evaluation y<sub>N</sub> in GF(2^deg), zero-padded to <em>deg/4</em> characters.</p>
+
+  <h2>File Output</h2>
+  <p>On Chromium-based browsers (Chrome, Edge, Opera), Horcrux uses the <strong>File System Access API</strong> to write shard folders directly to a user-chosen directory. On all other browsers (Firefox, Safari), the output is packaged as a zip file and downloaded.</p>
+
+  <h2>Compatibility</h2>
+  <p>Vaults and shards produced by this browser edition are <strong>byte-identical and interchangeable</strong> with those produced by the Python edition (<code>horcrux.py</code>). The same passphrase, salt, and coefficients will produce the same encrypted vault and the same shard strings.</p>
+  <p>Shards are <strong>not compatible</strong> with B. Poettering&rsquo;s <code>ssss-split</code>/<code>ssss-combine</code> tools due to differences in polynomial structure (monic vs. random leading coefficient) and byte serialization order in the XTEA diffusion layer.</p>
+
+  <h2>Credits &amp; References</h2>
+
+  <div class="ref"><h4>Shamir&rsquo;s Secret Sharing Scheme &mdash; Reference Implementation</h4>
+  <p>The GF(2^deg) field arithmetic and irreducible polynomial table used in Horcrux are based on the mathematical approach described by <strong>B. Poettering</strong> in <strong>ssss</strong> (Shamir&rsquo;s Secret Sharing Scheme), version 0.5, Copyright 2005&ndash;2006.</p>
+  <p>Project homepage: <a href="http://point-at-infinity.org/ssss/" target="_blank" rel="noopener">http://point-at-infinity.org/ssss/</a></p>
+  <p>ssss is licensed under the GNU General Public License v2. Horcrux does not contain ssss code &mdash; the SSSS implementation was written independently using the same underlying mathematics (Lagrange interpolation over binary extension fields). The irreducible polynomial table is a mathematical constant and is not copyrightable.</p>
+  </div>
+
+  <div class="ref"><h4>EFF Diceware Wordlist</h4>
+  <p>The passphrase generator uses the <strong>EFF Large Wordlist</strong>, a list of 7,776 words designed for generating strong diceware passphrases.</p>
+  <p>Published by the <strong>Electronic Frontier Foundation</strong> (EFF) on July 18, 2016.</p>
+  <p>Source: <a href="https://www.eff.org/dice" target="_blank" rel="noopener">https://www.eff.org/dice</a></p>
+  <p>The wordlist is embedded in <code>eff_wordlist.js</code> for offline use. It is redistributed under the <a href="https://creativecommons.org/licenses/by/3.0/us/" target="_blank" rel="noopener">Creative Commons Attribution 3.0 US</a> license.</p>
+  </div>
+
+  <div class="ref"><h4>Cryptographic Primitives</h4>
+  <p><strong>AES-256-CBC</strong> &mdash; NIST FIPS 197 (Advanced Encryption Standard) and SP 800-38A (Block Cipher Modes). Implemented via the browser&rsquo;s Web Crypto API (<code>SubtleCrypto</code>).</p>
+  <p><strong>PBKDF2-HMAC-SHA256</strong> &mdash; RFC 8018 (PKCS #5 v2.1). 100,000 iterations. Implemented via the browser&rsquo;s Web Crypto API.</p>
+  <p><strong>XTEA</strong> &mdash; Wheeler, D. and Needham, R. (1997). &ldquo;Tea extensions.&rdquo; Technical report, Computer Laboratory, University of Cambridge.</p>
+  </div>
+
+  <div class="ref"><h4>Third-Party Libraries</h4>
+  <p><strong>fflate</strong> &mdash; High-performance zip/unzip for JavaScript by 101arrowz. MIT licensed. <a href="https://github.com/101arrowz/fflate" target="_blank" rel="noopener">https://github.com/101arrowz/fflate</a></p>
+  </div>
+
+</div>
+
+<!-- CREATE -->
+<div class="pn" id="pc">
+  <div class="fi"><label>Vault ID (2 hex chars, e.g. A1)</label><input type="text" id="vid" maxlength="2" placeholder="A1" style="text-transform:uppercase;max-width:160px" oninput="this.value=this.value.toUpperCase()"></div>
+  <div class="fi">
+    <label>Folder to encrypt</label>
+    <div class="drop" id="df"><input type="file" id="fi" webkitdirectory multiple onchange="onFolder(this)">
+    <span id="fll">Click to choose folder &mdash; or drag it here</span></div>
+    <div class="pw" id="up" style="display:none;margin-top:8px"><div class="pb" id="upb"></div></div>
+    <div id="fp" style="font-size:12px;color:#aaa;font-family:var(--mono);margin-top:4px"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+    <div class="fi" style="margin:0"><label>Total shards (n)</label><input type="number" id="ns" value="5" min="2" max="20"></div>
+    <div class="fi" style="margin:0"><label>Threshold &mdash; shards to unlock (k)</label><input type="number" id="kt" value="3" min="2" max="20"></div>
+  </div>
+  <hr>
+  <label>Passphrase &mdash; Diceware (exactly 5 words)</label>
+  <div class="dice-wrap">
+    <div class="fi" style="flex:1;margin:0"><label>Dice roll (5 digits, 1&ndash;6)</label>
+    <input class="di" id="dr" maxlength="5" placeholder="34521" oninput="this.value=this.value.replace(/[^1-6]/g,'')" onkeydown="if(event.key==='Enter')aw()"></div>
+    <button class="btn g" onclick="aw()">Add Word</button>
+  </div>
+  <div id="wd" style="margin:6px 0 10px"></div>
+  <div id="pp" class="pp" style="display:none"></div>
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <button class="btn g" style="font-size:13px;padding:6px 14px" onclick="undo()">&#8592; Undo</button>
+    <button class="btn g" style="font-size:13px;padding:6px 14px" onclick="clr()">Clear</button>
+  </div>
+  <div class="st inf on" id="ds">Enter dice rolls one at a time. Roll 5 dice and type the 5 numbers (1&ndash;6).</div>
+  <hr>
+  <button class="btn p" id="cb" onclick="doCreate()">Create Encrypted Vault</button>
+  <div class="pw" id="cp" style="display:none"><div class="pb" id="cpb"></div></div>
+  <div class="st" id="cs"></div>
+  <div id="cr" style="display:none;margin-top:16px">
+    <div class="st ok on">Vault created. Download each shard zip below.</div>
+    <div id="sl" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- RECOVER -->
+<div class="pn" id="pr">
+  <div class="sec-hd">1. Shard Handling</div>
+  <div class="fi"><label>Threshold (k)</label><input type="number" id="rt" value="3" min="2" max="20" onchange="bsh()" style="max-width:120px"></div>
+  <div class="fi"><label>Shard strings</label>
+    <div id="rs"></div>
+    <button class="btn g" style="margin-top:6px;font-size:13px;padding:6px 14px" onclick="ash()">+ Add shard</button>
+  </div>
+  <button class="btn p" onclick="doCombine()">Combine Shards</button>
+  <div class="st" id="cbs"></div>
+  <div id="ckr" style="display:none;margin-top:10px">
+    <label>Recovered passphrase</label>
+    <div class="pp" id="ckv"></div>
+  </div>
+
+  <div class="sec-hd">2. Encrypted Vault File</div>
+  <div class="fi">
+    <div class="drop" id="de"><input type="file" id="ei" accept=".enc" onchange="onEnc(this)">
+    <span id="ell">Click to choose .enc file</span></div>
+  </div>
+
+  <div class="sec-hd">3. Unlock Vault</div>
+  <button class="btn p" id="rb" onclick="doRecover()">Unlock Vault</button>
+  <div class="pw" id="rp" style="display:none"><div class="pb" id="rpb"></div></div>
+  <div class="st" id="rs2"></div>
+  <div id="rr" style="display:none;margin-top:14px">
+    <div class="st ok on">Files recovered successfully.</div>
+    <div id="rfl" style="font-family:var(--mono);font-size:13px;margin-top:10px"></div>
+  </div>
+</div>
+
+</div><!-- .pg -->
+
+<!-- Load fflate for zip/unzip (vendored locally for offline use) -->
+<script src="fflate.js"></script>
+<!-- Load embedded EFF wordlist, crypto core, and diceware -->
+<script src="eff_wordlist.js"></script>
+<script src="horcrux-core.js"></script>
+<script src="diceware.js"></script>
+
+<script>
+const st = (id, t, m) => { const e = document.getElementById(id); e.className = 'st on ' + t; e.innerHTML = m; };
+
+function tab(n) {
+  const names = ['g', 'c', 'r', 'd'];
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('on', names[i] === n));
+  document.querySelectorAll('.pn').forEach(p => p.classList.remove('on'));
+  document.getElementById('p' + n).classList.add('on');
+}
+
+// ── folder input ──
+// Files stay in memory as a FileList — no server upload needed
+let _files = null;
+let _folderName = null;
+
+async function onFolder(inp) {
+  if (!inp.files.length) return;
+  const vid = document.getElementById('vid').value.toUpperCase().trim();
+  if (!/^[0-9A-F]{2}$/.test(vid)) {
+    alert('Enter a valid Vault ID (2 hex chars) before selecting a folder.');
+    inp.value = '';
+    return;
+  }
+  _files = Array.from(inp.files);
+  _folderName = _files[0].webkitRelativePath.split('/')[0];
+  document.getElementById('fll').textContent = '\u2713  ' + _folderName + '  (' + _files.length + ' file(s) ready)';
+  document.getElementById('df').classList.add('ld');
+  document.getElementById('fp').textContent = '';
+}
+
+// ── diceware ──
+let _words = [], _pp = null;
+
+function aw() {
+  if (_words.length >= 5) return;
+  const roll = document.getElementById('dr').value.trim();
+  try {
+    const word = Diceware.lookupWord(roll);
+    _words.push({ roll, word });
+    document.getElementById('dr').value = '';
+    document.getElementById('dr').focus();
+    rw();
+  } catch (e) { st('ds', 'err', e.message); }
+}
+
+function rw() {
+  document.getElementById('wd').innerHTML = _words.map(w => `<span class="wrd" title="${w.roll}">${w.word}</span>`).join('');
+  const pp = document.getElementById('pp');
+  if (_words.length === 5) {
+    _pp = _words.map(w => w.word).join('-');
+    pp.textContent = _pp; pp.style.display = 'block';
+    document.getElementById('dr').disabled = true;
+    st('ds', 'ok', `Passphrase ready (${_pp.length} chars).`);
+  } else {
+    _pp = null; pp.style.display = 'none';
+    document.getElementById('dr').disabled = false;
+    st('ds', 'inf', _words.length === 0
+      ? 'Enter dice rolls one at a time. Roll 5 dice and type the 5 numbers (1\u20136).'
+      : `Word ${_words.length} of 5 added. ${5 - _words.length} more to go.`);
+  }
+}
+
+function undo() { if (!_words.length) return; _words.pop(); rw(); }
+function clr() { _words = []; _pp = null; rw(); }
+
+// ── create vault ──
+async function doCreate() {
+  const vid = document.getElementById('vid').value.toUpperCase().trim();
+  const n = parseInt(document.getElementById('ns').value, 10);
+  const k = parseInt(document.getElementById('kt').value, 10);
+  if (!_files || !_files.length) { st('cs', 'err', 'Please select a folder first.'); return; }
+  if (!/^[0-9A-F]{2}$/.test(vid)) { st('cs', 'err', 'Vault ID must be 2 hex characters, e.g. A1 or FF.'); return; }
+  if (isNaN(n) || isNaN(k) || k < 2 || k > n || n > 20) { st('cs', 'err', 'Invalid n/k: ensure 2 \u2264 k \u2264 n \u2264 20.'); return; }
+  if (!_pp) { st('cs', 'err', 'Complete the diceware passphrase (5 words) first.'); return; }
+
+  document.getElementById('cb').disabled = true;
+  document.getElementById('cp').style.display = 'block';
+  document.getElementById('cpb').style.width = '10%';
+  st('cs', 'inf', '<span class="sp"></span>Building zip from folder\u2026');
+
+  try {
+    // Build zip from selected files
+    const zipEntries = {};
+    const manifest = [];
+    for (let fi = 0; fi < _files.length; fi++) {
+      const file = _files[fi];
+      const rel = file.webkitRelativePath.split('/').slice(1).join('/').replace(/\\/g, '/');
+      const data = new Uint8Array(await file.arrayBuffer());
+      const hash = await HorcruxCore.sha256hex(data);
+      manifest.push(hash + '  ' + rel);
+      zipEntries[rel] = data;
+      document.getElementById('cpb').style.width = (10 + (fi / _files.length) * 30) + '%';
+    }
+    zipEntries['Vault_Manifest.txt'] = new TextEncoder().encode(manifest.join('\r\n'));
+
+    st('cs', 'inf', '<span class="sp"></span>Compressing\u2026');
+    document.getElementById('cpb').style.width = '40%';
+    const zipBytes = fflate.zipSync(zipEntries, { level: 6 });
+
+    // Encrypt
+    st('cs', 'inf', '<span class="sp"></span>Encrypting (PBKDF2 + AES-256-CBC)\u2026');
+    document.getElementById('cpb').style.width = '60%';
+    const enc = await HorcruxCore.vaultEncrypt(zipBytes, _pp);
+
+    // Split secret
+    st('cs', 'inf', '<span class="sp"></span>Splitting passphrase into shards\u2026');
+    document.getElementById('cpb').style.width = '80%';
+    const shards = HorcruxCore.splitSecret(_pp, n, k, vid);
+
+    // Build and download shard zips
+    // Try File System Access API first, fall back to individual zip downloads
+    let savedTo = '';
+    if (window.showDirectoryPicker) {
+      try {
+        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        const vaultDir = await dirHandle.getDirectoryHandle(vid, { create: true });
+        for (let i = 0; i < n; i++) {
+          const shardDir = await vaultDir.getDirectoryHandle('Shard_' + (i + 1), { create: true });
+          await _writeFile(shardDir, 'Vault_' + vid + '.enc', enc);
+          await _writeFile(shardDir, vid + '_' + (i + 1) + '.txt', new TextEncoder().encode(shards[i]));
+          await _writeFile(shardDir, 'restore_instructions.txt', new TextEncoder().encode(
+            _instructions(vid, i + 1, n, k, shards[i])
+          ));
+        }
+        savedTo = dirHandle.name + '/' + vid;
+      } catch (e) {
+        // User cancelled or API failed — fall back to zip download
+        if (e.name !== 'AbortError') console.warn('File System Access failed, falling back to zip download:', e);
+        savedTo = await _downloadShardZips(vid, n, k, enc, shards);
+      }
+    } else {
+      savedTo = await _downloadShardZips(vid, n, k, enc, shards);
+    }
+
+    document.getElementById('cpb').style.width = '100%';
+    document.getElementById('cr').style.display = 'block';
+    const sl = document.getElementById('sl'); sl.innerHTML = '';
+    shards.forEach((s, i) => {
+      const d = document.createElement('div'); d.className = 'card';
+      d.innerHTML = `<div class="ci">Shard ${i + 1} of ${n}</div><div class="cv">${s}</div>`;
+      sl.appendChild(d);
+    });
+    st('cs', 'ok', `Vault ${vid} created \u2014 ${savedTo}<br>${n} shards, threshold ${k}.`);
+  } catch (e) {
+    st('cs', 'err', e.message);
+    document.getElementById('cb').disabled = false;
+    document.getElementById('cp').style.display = 'none';
+  }
+}
+
+async function _writeFile(dirHandle, name, data) {
+  const fh = await dirHandle.getFileHandle(name, { create: true });
+  const ws = await fh.createWritable();
+  await ws.write(data);
+  await ws.close();
+}
+
+function _instructions(vid, i, n, k, shard) {
+  return (
+`HORCRUX VAULT \u2014 SHARD ${i} OF ${n}
+Vault ID: ${vid}  |  Unlock with any ${k} of ${n} shards
+${'='.repeat(50)}
+
+HOW TO RECOVER YOUR FILES
+--------------------------
+1. Gather at least ${k} shard holders together.
+
+2. Open  horcrux.html  in any web browser.
+   No internet needed. No installation needed.
+
+3. Go to the Recover Vault tab:
+   a. Set threshold to ${k}
+   b. Paste each person's shard string
+   c. Click Combine Shards to verify
+   d. Load the file:  Vault_${vid}.enc
+   e. Click Unlock Vault
+
+YOUR SHARD STRING
+-----------------
+${shard}
+
+Keep this USB drive safe. Do not share this string.
+`).replace(/\n/g, '\r\n');
+}
+
+async function _downloadShardZips(vid, n, k, enc, shards) {
+  // Package all shards into a single zip for download
+  // Include explicit directory entries for Windows "Extract All" compatibility
+  const entries = {};
+  const empty = new Uint8Array(0);
+  entries[vid + '/'] = empty;
+  for (let i = 0; i < n; i++) {
+    const prefix = vid + '/Shard_' + (i + 1) + '/';
+    entries[prefix] = empty;
+    entries[prefix + 'Vault_' + vid + '.enc'] = enc;
+    entries[prefix + vid + '_' + (i + 1) + '.txt'] = new TextEncoder().encode(shards[i]);
+    entries[prefix + 'restore_instructions.txt'] = new TextEncoder().encode(
+      _instructions(vid, i + 1, n, k, shards[i])
+    );
+  }
+  const zip = fflate.zipSync(entries, { level: 6 });
+  _downloadBlob(zip, 'Vault_' + vid + '.zip', 'application/zip');
+  return 'downloaded as Vault_' + vid + '.zip';
+}
+
+function _withDirEntries(allEntries, fileNames) {
+  // Build a zip-compatible object with explicit directory entries for Windows compatibility
+  const out = {};
+  const dirs = new Set();
+  const empty = new Uint8Array(0);
+  for (const name of fileNames) {
+    const parts = name.split('/');
+    for (let i = 1; i < parts.length; i++) {
+      dirs.add(parts.slice(0, i).join('/') + '/');
+    }
+  }
+  for (const d of Array.from(dirs).sort()) out[d] = empty;
+  for (const name of fileNames) out[name] = allEntries[name];
+  return out;
+}
+
+function _downloadBlob(data, filename, mime) {
+  const blob = new Blob([data], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ── combine shards ──
+function doCombine() {
+  const shards = Array.from(document.querySelectorAll('.si')).map(i => i.value.trim().replace(/^\uFEFF/, '')).filter(Boolean);
+  const k = parseInt(document.getElementById('rt').value, 10);
+  if (shards.length < k) { st('cbs', 'err', `Need ${k} shards, have ${shards.length}.`); return; }
+  st('cbs', 'inf', '<span class="sp"></span>Combining shards\u2026');
+  try {
+    const pp = HorcruxCore.joinSecret(shards, k);
+    if (!pp) throw new Error('Could not reconstruct passphrase. Check shard strings and threshold count.');
+    document.getElementById('ckv').textContent = pp;
+    document.getElementById('ckr').style.display = 'block';
+    st('cbs', 'ok', 'Passphrase reconstructed successfully.');
+  } catch (e) { st('cbs', 'err', e.message); }
+}
+
+// ── recover ──
+let _encData = null;
+let _encName = null;
+
+async function onEnc(inp) {
+  const f = inp.files[0]; if (!f) return;
+  document.getElementById('ell').textContent = 'Loading ' + f.name + '\u2026';
+  _encData = new Uint8Array(await f.arrayBuffer());
+  _encName = f.name;
+  document.getElementById('ell').textContent = '\u2713  ' + f.name;
+  document.getElementById('de').classList.add('ld');
+}
+
+function bsh() {
+  const k = parseInt(document.getElementById('rt').value, 10) || 3;
+  const c = document.getElementById('rs');
+  while (c.children.length < k) ash();
+}
+function ash() {
+  const c = document.getElementById('rs'); const n = c.children.length + 1;
+  const r = document.createElement('div'); r.className = 'sr';
+  r.innerHTML = `<span class="sn">${n}.</span><input class="si" placeholder="AB-${n}-3D97\u2026" oninput="vs(this)" spellcheck="false"><button class="sc" onclick="this.previousElementSibling.value='';this.previousElementSibling.className='si'">\u00d7</button>`;
+  c.appendChild(r);
+}
+function vs(inp) {
+  const v = inp.value.trim(); if (!v) { inp.className = 'si'; return; }
+  const p = v.split('-');
+  inp.className = 'si ' + (p.length >= 3 && /^\d+$/.test(p[p.length - 2]) && /^[0-9A-Fa-f]+$/.test(p[p.length - 1]) ? 'v' : 'bad');
+}
+
+async function doRecover() {
+  const shards = Array.from(document.querySelectorAll('.si')).map(i => i.value.trim().replace(/^\uFEFF/, '')).filter(Boolean);
+  const k = parseInt(document.getElementById('rt').value, 10);
+  if (!_encData) { st('rs2', 'err', 'Select the .enc vault file first.'); return; }
+  if (shards.length < k) { st('rs2', 'err', `Need ${k} shards, have ${shards.length}.`); return; }
+
+  document.getElementById('rb').disabled = true;
+  document.getElementById('rp').style.display = 'block';
+  document.getElementById('rpb').style.width = '15%';
+  st('rs2', 'inf', '<span class="sp"></span>Reconstructing key\u2026');
+
+  try {
+    const pp = HorcruxCore.joinSecret(shards, k);
+    if (!pp) throw new Error('Could not reconstruct passphrase. Check shard strings and threshold count.');
+
+    document.getElementById('rpb').style.width = '40%';
+    st('rs2', 'inf', '<span class="sp"></span>Decrypting vault\u2026');
+    const zipBytes = await HorcruxCore.vaultDecrypt(_encData, pp);
+
+    document.getElementById('rpb').style.width = '70%';
+    st('rs2', 'inf', '<span class="sp"></span>Extracting files\u2026');
+    const entries = fflate.unzipSync(zipBytes);
+
+    const files = Object.keys(entries).filter(n => n !== 'Vault_Manifest.txt');
+
+    // Extract vault ID from shard string for folder name
+    const sp = shards[0].split('-');
+    const vid = sp.slice(0, -2).join('-') || 'unknown';
+
+    // Try File System Access API, fall back to zip download
+    let savedTo = '';
+    if (window.showDirectoryPicker) {
+      try {
+        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        for (const name of files) {
+          const parts = name.split('/');
+          let dir = dirHandle;
+          for (let i = 0; i < parts.length - 1; i++) {
+            dir = await dir.getDirectoryHandle(parts[i], { create: true });
+          }
+          await _writeFile(dir, parts[parts.length - 1], entries[name]);
+        }
+        savedTo = dirHandle.name;
+      } catch (e) {
+        if (e.name !== 'AbortError') console.warn('File System Access failed:', e);
+        // Fall back to zip download
+        const zip = fflate.zipSync(_withDirEntries(entries, files));
+        _downloadBlob(zip, 'Recovered_' + vid + '.zip', 'application/zip');
+        savedTo = 'downloaded as Recovered_' + vid + '.zip';
+      }
+    } else {
+      // Repackage (without manifest) as download zip
+      const zip = fflate.zipSync(_withDirEntries(entries, files));
+      _downloadBlob(zip, 'Recovered_' + vid + '.zip', 'application/zip');
+      savedTo = 'downloaded as Recovered_' + vid + '.zip';
+    }
+
+    document.getElementById('rpb').style.width = '100%';
+    document.getElementById('rr').style.display = 'block';
+    document.getElementById('rfl').innerHTML = '<strong>Saved to:</strong> ' + savedTo + '<br><br>' + files.map(f => '&nbsp;&nbsp;' + f).join('<br>');
+    st('rs2', 'ok', `${files.length} file(s) recovered successfully.`);
+  } catch (e) {
+    st('rs2', 'err', e.message);
+    document.getElementById('rb').disabled = false;
+    document.getElementById('rp').style.display = 'none';
+  }
+}
+
+// init
+bsh();
+</script>
+</body>
+</html>
