@@ -542,20 +542,22 @@ Keep this USB drive safe. Do not share this string.
 }
 
 async function _downloadShardZips(vid, n, k, enc, shards) {
-  // Directories are inferred from file paths. Explicit dir entries made
-  // Windows Explorer's extractor throw 0x80004005 on drag-out.
-  const entries = {};
+  // One flat zip per shard, each directly copyable to a USB drive. Windows
+  // Explorer's built-in extractor trips (0x80004005) on the deeper nested
+  // structure a single master zip would produce, so we split it up.
+  st('cs', 'inf', `<span class="sp"></span>Downloading ${n} shard packages \u2014 please allow multiple downloads if prompted\u2026`);
   for (let i = 0; i < n; i++) {
-    const prefix = vid + '/Shard_' + (i + 1) + '/';
-    entries[prefix + 'Vault_' + vid + '.enc'] = enc;
-    entries[prefix + vid + '_' + (i + 1) + '.txt'] = new TextEncoder().encode(shards[i]);
-    entries[prefix + 'restore_instructions.txt'] = new TextEncoder().encode(
+    const entries = {};
+    entries['Vault_' + vid + '.enc'] = enc;
+    entries[vid + '_' + (i + 1) + '.txt'] = new TextEncoder().encode(shards[i]);
+    entries['restore_instructions.txt'] = new TextEncoder().encode(
       _instructions(vid, i + 1, n, k, shards[i])
     );
+    const zip = fflate.zipSync(entries, { level: 6 });
+    _downloadBlob(zip, 'Vault_' + vid + '_Shard_' + (i + 1) + '.zip', 'application/zip');
+    await new Promise(r => setTimeout(r, 300));
   }
-  const zip = fflate.zipSync(entries, { level: 6 });
-  _downloadBlob(zip, 'Vault_' + vid + '.zip', 'application/zip');
-  return 'downloaded as Vault_' + vid + '.zip';
+  return `${n} downloads (Vault_${vid}_Shard_1.zip through _Shard_${n}.zip)`;
 }
 
 function _downloadBlob(data, filename, mime) {
@@ -566,6 +568,17 @@ function _downloadBlob(data, filename, mime) {
   document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ── diceware sanity check (wrong shards produce random-looking garbage) ──
+let _dicewareSet = null;
+function _looksLikeDiceware(pp) {
+  if (!_dicewareSet) {
+    _dicewareSet = new Set(typeof _WL === 'object' ? Object.values(_WL) : []);
+  }
+  if (_dicewareSet.size === 0) return true;  // wordlist unavailable: fail open
+  const parts = pp.split('-');
+  return parts.length === 5 && parts.every(w => _dicewareSet.has(w));
 }
 
 // ── shard-subset generator (for tolerating one bad shard during recovery) ──
@@ -592,6 +605,10 @@ function doCombine() {
   try {
     const pp = HorcruxCore.joinSecret(shards, k);
     if (!pp) throw new Error('Could not reconstruct passphrase. Check shard strings and threshold count.');
+    if (!_looksLikeDiceware(pp)) {
+      document.getElementById('ckr').style.display = 'none';
+      throw new Error('Reconstructed passphrase does not match the 5-word diceware format. One or more shards may be wrong, or the threshold may be incorrect.');
+    }
     document.getElementById('ckv').textContent = pp;
     document.getElementById('ckr').style.display = 'block';
     st('cbs', 'ok', 'Passphrase reconstructed successfully.');
