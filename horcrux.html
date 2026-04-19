@@ -121,22 +121,40 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
     <li>Choose <strong>Total shards</strong> (how many USB drives to make) and <strong>Threshold</strong> (how many are needed to unlock). A common choice is 5 shards with a threshold of 3 &mdash; any 3 of the 5 people can unlock the vault.</li>
     <li>Roll 5 physical dice five times and type each roll into the passphrase generator to build a 5-word diceware passphrase.</li>
     <li>Click <em>Create Encrypted Vault</em>.</li>
-    <li>On Chrome or Edge: you will be asked to choose a folder &mdash; the shard directories are written there directly.</li>
-    <li>On other browsers: a zip file containing all shard folders is downloaded. Unzip it and copy each <code>Shard_N</code> folder to a separate USB drive.</li>
+    <li>Save the shard folders:
+      <ul>
+        <li><strong>Chrome or Edge:</strong> a folder picker appears. Pick a folder, and the tool writes one <code>Shard_N</code> directory per shard directly into it.</li>
+        <li><strong>Firefox or Safari</strong> (or if you cancel the folder picker): the results page shows a <em>Download</em> button for each shard. Click them one at a time. Each button produces a small zip (<code>Vault_XX_Shard_N.zip</code>) containing that shard&rsquo;s three files.</li>
+      </ul>
+    </li>
+    <li>Copy each shard onto its own USB drive &mdash; one USB per shard.
+      If you got a zip per shard, unzip it onto the USB; the USB should end up with three files at the top level: <code>Vault_XX.enc</code>, <code>XX_N.txt</code>, and <code>restore_instructions.txt</code>.</li>
+    <li><strong>Copy the Horcrux tool onto every USB too</strong>, so holders can recover the vault years from now without having to find the tool online. Copy these five files to each USB alongside the shard files:
+      <ul style="font-family:var(--mono);font-size:13px;background:var(--cream);border:1px solid var(--rule);padding:8px 20px;border-radius:2px;list-style-type:disc">
+        <li>horcrux.html</li>
+        <li>horcrux-core.js</li>
+        <li>diceware.js</li>
+        <li>eff_wordlist.js</li>
+        <li>fflate.js</li>
+      </ul>
+      Total size about 225&nbsp;KB &mdash; negligible on any USB drive.
+    </li>
   </ol>
 
-  <div class="note" style="border-left-color:var(--red);background:#faf3f2"><strong>Important:</strong> After copying each <code>Shard_N</code> folder to its USB drive, <strong>delete all copies of the shard folders from your computer</strong> &mdash; including the downloaded zip file. If the shards remain on your machine, anyone with access to it could reconstruct the passphrase and decrypt the vault, defeating the purpose of splitting the key among multiple people. See &ldquo;After distribution&rdquo; below for deletion instructions.</div>
+  <div class="note" style="border-left-color:var(--red);background:#faf3f2"><strong>Important:</strong> After each USB is prepared and delivered, <strong>delete every local copy of the shard files and any downloaded zips from your computer</strong>. If shards remain on your machine, anyone with access to it could reconstruct the passphrase and decrypt the vault &mdash; defeating the purpose of splitting the key among multiple people. See &ldquo;After distribution&rdquo; below for deletion instructions.</div>
 
   <h2>Recovering a vault &mdash; step by step</h2>
   <ol>
-    <li>Gather at least the required number of shard holders together.</li>
-    <li>Open this file (<code>horcrux.html</code>) in any browser. No internet needed.</li>
+    <li>Gather at least the required number of shard holders together (or their USBs).</li>
+    <li>Put any one of the USB drives into a computer and open <code>horcrux.html</code> from it (double-click, or right-click &rarr; Open with &rarr; any browser). No internet needed. No installation needed.</li>
     <li>Go to the <strong>Recover Vault</strong> tab.</li>
-    <li>Set the <strong>threshold</strong> and enter each person&rsquo;s shard string.</li>
-    <li>Click <strong>Combine Shards</strong> to verify the passphrase is reconstructed correctly.</li>
-    <li>Select the <code>.enc</code> vault file (from any shard holder&rsquo;s USB drive).</li>
-    <li>Click <strong>Unlock Vault</strong>. On Chrome/Edge you choose where to save; on other browsers the files download as a zip.</li>
+    <li>Set <strong>Threshold (k)</strong> to the number shown on any USB&rsquo;s <code>restore_instructions.txt</code>.</li>
+    <li>For each holder&rsquo;s USB, open their <code>XX_N.txt</code> file (where <code>XX</code> is the vault ID and <code>N</code> is the shard number) and paste the line into one of the shard boxes.</li>
+    <li>Click <strong>Combine Shards</strong>. The 5-word passphrase should appear. If it doesn&rsquo;t, check the pasted shards for typos. You can supply more than the threshold &mdash; the tool will tolerate one typo when you do.</li>
+    <li>Under <strong>Encrypted Vault File</strong>, pick <code>Vault_XX.enc</code> from any of the USBs (they&rsquo;re all identical copies).</li>
+    <li>Click <strong>Unlock Vault</strong>. On Chrome or Edge you choose where to save the recovered files; on Firefox or Safari the files download as a zip.</li>
   </ol>
+  <div class="note">If the tool shows an orange <em>&ldquo;Legacy vault format&rdquo;</em> message after a successful recovery, the vault was created by an older version. The files came through fine &mdash; but consider creating a new vault with the recovered files to upgrade to the authenticated Horcrux1 format.</div>
 
   <h2>After distribution &mdash; deleting the originals</h2>
   <p>Once you have confirmed that your vault was created correctly and each shard holder has their USB drive, you should delete the shard folders from your computer. They contain copies of the encrypted vault and are not needed locally.</p>
@@ -548,29 +566,112 @@ async function _writeFile(dirHandle, name, data) {
 
 function _instructions(vid, i, n, k, shard) {
   return (
-`HORCRUX VAULT \u2014 SHARD ${i} OF ${n}
-Vault ID: ${vid}  |  Unlock with any ${k} of ${n} shards
-${'='.repeat(50)}
+`YOUR HORCRUX KEY \u2014 Piece ${i} of ${n}
+Vault "${vid}"   (Requires any ${k} of ${n} pieces to unlock)
+${'='.repeat(64)}
 
-HOW TO RECOVER YOUR FILES
---------------------------
-1. Gather at least ${k} shard holders together.
 
-2. Open  horcrux.html  in any web browser.
-   No internet needed. No installation needed.
+WHAT IS THIS USB?
 
-3. Go to the Recover Vault tab:
-   a. Set threshold to ${k}
-   b. Paste each person's shard string
-   c. Click Combine Shards to verify
-   d. Load the file:  Vault_${vid}.enc
-   e. Click Unlock Vault
+This USB drive holds ONE PIECE of a key to someone's important
+files. The files themselves are locked inside "Vault_${vid}.enc"
+on this USB. To unlock them, the key must be rebuilt from its
+pieces.
 
-YOUR SHARD STRING
------------------
-${shard}
+The key was split into ${n} pieces and given to ${n} different
+people. ANY ${k} of those pieces, combined, can rebuild the
+key and unlock the files.
 
-Keep this USB drive safe. Do not share this string.
+ALONE, THIS USB CANNOT UNLOCK ANYTHING. That is the point.
+
+
+WHEN TO USE IT
+
+Only when it is needed \u2014 usually after the vault's creator has
+passed away, become incapacitated, or otherwise asked for the
+vault to be opened. There is no hurry. This USB can sit in a
+safe or a drawer for years.
+
+
+HOW TO RECOVER THE FILES
+
+1) Gather at least ${k} of the ${n} USB drives. Any ${k} will
+   do; they do not all need to be the originals. The vault's
+   creator should have told you who holds the others.
+
+2) Plug this USB into any computer (Windows, Mac, or Linux).
+
+3) Find the file called   horcrux.html   on this USB and
+   double-click it. It will open in your web browser.
+
+   - You do NOT need an internet connection.
+   - You do NOT need to install anything.
+   - If nothing happens when you double-click:
+     right-click the file, choose "Open with", and pick any
+     of: Chrome, Edge, Firefox, or Safari.
+
+4) In the web browser:
+
+   a) Click the "Recover Vault" tab near the top of the page.
+
+   b) In the "Threshold (k)" box, enter:   ${k}
+
+   c) For each USB drive you gathered, look for a file named
+      starting with "${vid}_" and ending in ".txt"
+      (for example, "${vid}_1.txt", "${vid}_2.txt", etc.).
+      Open it, select the entire line inside, and paste that
+      line into one of the "Shard strings" boxes in the
+      browser. Do this for each holder's file.
+
+   d) Click "Combine Shards". You should see a passphrase of
+      five words separated by hyphens appear (like
+      "word-word-word-word-word"). If you see an error
+      instead, check that each shard was pasted correctly.
+
+   e) Under "Encrypted Vault File", click the file chooser
+      and select   Vault_${vid}.enc   from ANY of the USB
+      drives (they are all identical copies).
+
+   f) Click "Unlock Vault".
+
+   g) The recovered files will either be saved to a folder
+      you choose (on Chrome or Edge) or downloaded as a zip
+      file (on Firefox or Safari).
+
+
+THIS USB'S KEY PIECE   (do not share, do not lose)
+
+   ${shard}
+
+
+WHAT IF...
+
+...I lose this USB?
+   As long as at least ${k} of the ${n} USBs still exist, the
+   vault can still be opened. Losing ONE USB does not lock
+   anything out. Tell the vault's creator if you can.
+
+...someone steals this USB?
+   They have one piece. They cannot open the vault without
+   at least ${k - 1} other pieces. Your files stay safe.
+
+...I want to "check" what is on the USB?
+   Please don't attempt recovery on your own, and do not plug
+   this USB into an untrusted computer. If you suspect
+   something is wrong, contact the vault's creator.
+
+...the tool doesn't open or shows an error?
+   The "horcrux.html" file is the tool. It is a normal web
+   page. If double-clicking does not work, try right-clicking
+   the file and choosing "Open with" to pick a browser
+   manually. If the browser shows a blank page, try a
+   different browser from the list in step 3.
+
+
+${'='.repeat(64)}
+Keep this USB somewhere safe and accessible \u2014 a safe deposit
+box, a home safe, or with a trusted family member. You may
+never need to open it. If you do, this page tells you how.
 `).replace(/\n/g, '\r\n');
 }
 
