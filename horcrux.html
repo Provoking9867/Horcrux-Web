@@ -527,14 +527,11 @@ Keep this USB drive safe. Do not share this string.
 }
 
 async function _downloadShardZips(vid, n, k, enc, shards) {
-  // Package all shards into a single zip for download
-  // Include explicit directory entries for Windows "Extract All" compatibility
+  // Directories are inferred from file paths. Explicit dir entries made
+  // Windows Explorer's extractor throw 0x80004005 on drag-out.
   const entries = {};
-  const empty = new Uint8Array(0);
-  entries[vid + '/'] = empty;
   for (let i = 0; i < n; i++) {
     const prefix = vid + '/Shard_' + (i + 1) + '/';
-    entries[prefix] = empty;
     entries[prefix + 'Vault_' + vid + '.enc'] = enc;
     entries[prefix + vid + '_' + (i + 1) + '.txt'] = new TextEncoder().encode(shards[i]);
     entries[prefix + 'restore_instructions.txt'] = new TextEncoder().encode(
@@ -544,22 +541,6 @@ async function _downloadShardZips(vid, n, k, enc, shards) {
   const zip = fflate.zipSync(entries, { level: 6 });
   _downloadBlob(zip, 'Vault_' + vid + '.zip', 'application/zip');
   return 'downloaded as Vault_' + vid + '.zip';
-}
-
-function _withDirEntries(allEntries, fileNames) {
-  // Build a zip-compatible object with explicit directory entries for Windows compatibility
-  const out = {};
-  const dirs = new Set();
-  const empty = new Uint8Array(0);
-  for (const name of fileNames) {
-    const parts = name.split('/');
-    for (let i = 1; i < parts.length; i++) {
-      dirs.add(parts.slice(0, i).join('/') + '/');
-    }
-  }
-  for (const d of Array.from(dirs).sort()) out[d] = empty;
-  for (const name of fileNames) out[name] = allEntries[name];
-  return out;
 }
 
 function _downloadBlob(data, filename, mime) {
@@ -723,13 +704,13 @@ async function doRecover() {
           return;
         }
         console.warn('File System Access failed:', e);
-        const zip = fflate.zipSync(_withDirEntries(entries, files));
+        const zip = fflate.zipSync(Object.fromEntries(files.map(n => [n, entries[n]])));
         _downloadBlob(zip, 'Recovered_' + vid + '.zip', 'application/zip');
         savedTo = 'downloaded as Recovered_' + vid + '.zip';
       }
     } else {
       // Repackage (without manifest) as download zip
-      const zip = fflate.zipSync(_withDirEntries(entries, files));
+      const zip = fflate.zipSync(Object.fromEntries(files.map(n => [n, entries[n]])));
       _downloadBlob(zip, 'Recovered_' + vid + '.zip', 'application/zip');
       savedTo = 'downloaded as Recovered_' + vid + '.zip';
     }
