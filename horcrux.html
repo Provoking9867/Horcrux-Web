@@ -458,8 +458,13 @@ async function doCreate() {
         }
         savedTo = dirHandle.name + '/' + vid;
       } catch (e) {
-        // User cancelled or API failed — fall back to zip download
-        if (e.name !== 'AbortError') console.warn('File System Access failed, falling back to zip download:', e);
+        if (e.name === 'AbortError') {
+          st('cs', 'err', 'Cancelled \u2014 no files were written.');
+          document.getElementById('cb').disabled = false;
+          document.getElementById('cp').style.display = 'none';
+          return;
+        }
+        console.warn('File System Access failed, falling back to zip download:', e);
         savedTo = await _downloadShardZips(vid, n, k, enc, shards);
       }
     } else {
@@ -471,7 +476,11 @@ async function doCreate() {
     const sl = document.getElementById('sl'); sl.innerHTML = '';
     shards.forEach((s, i) => {
       const d = document.createElement('div'); d.className = 'card';
-      d.innerHTML = `<div class="ci">Shard ${i + 1} of ${n}</div><div class="cv">${s}</div>`;
+      const ci = document.createElement('div'); ci.className = 'ci';
+      ci.textContent = `Shard ${i + 1} of ${n}`;
+      const cv = document.createElement('div'); cv.className = 'cv';
+      cv.textContent = s;
+      d.append(ci, cv);
       sl.appendChild(d);
     });
     st('cs', 'ok', `Vault ${vid} created \u2014 ${savedTo}<br>${n} shards, threshold ${k}.`);
@@ -563,6 +572,21 @@ function _downloadBlob(data, filename, mime) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+// ── shard-subset generator (for tolerating one bad shard during recovery) ──
+function* kCombinations(arr, k) {
+  const n = arr.length;
+  if (k > n || k < 1) return;
+  const idx = Array.from({length: k}, (_, i) => i);
+  while (true) {
+    yield idx.map(i => arr[i]);
+    let i = k - 1;
+    while (i >= 0 && idx[i] === n - k + i) i--;
+    if (i < 0) return;
+    idx[i]++;
+    for (let j = i + 1; j < k; j++) idx[j] = idx[j - 1] + 1;
+  }
+}
+
 // ── combine shards ──
 function doCombine() {
   const shards = Array.from(document.querySelectorAll('.si')).map(i => i.value.trim().replace(/^\uFEFF/, '')).filter(Boolean);
@@ -620,18 +644,58 @@ async function doRecover() {
   st('rs2', 'inf', '<span class="sp"></span>Reconstructing key\u2026');
 
   try {
-    const pp = HorcruxCore.joinSecret(shards, k);
-    if (!pp) throw new Error('Could not reconstruct passphrase. Check shard strings and threshold count.');
+    // Try every k-subset of supplied shards until one decrypts + unzips.
+    // Tolerates one (or more) mistyped shard when the user supplies extras.
+    let pp = null, zipBytes = null, entries = null, lastErr = null, tried = 0;
+    const SUBSET_CAP = 500;
+    st('rs2', 'inf', '<span class="sp"></span>Trying shard combinations\u2026');
+    for (const subset of kCombinations(shards, k)) {
+      if (++tried > SUBSET_CAP) break;
+      const candidate = HorcruxCore.joinSecret(subset, k);
+      if (!candidate) continue;
+      try {
+        const zb = await HorcruxCore.vaultDecrypt(_encData, candidate);
+        const ent = fflate.unzipSync(zb);
+        pp = candidate; zipBytes = zb; entries = ent;
+        break;
+      } catch (e) { lastErr = e; }
+    }
+    if (!pp) {
+      throw new Error(tried > SUBSET_CAP
+        ? `Tried ${SUBSET_CAP} shard subsets without success. Check threshold and shard strings.`
+        : `No combination of shards unlocked the vault. ${lastErr ? lastErr.message : 'Check shard strings and threshold.'}`);
+    }
+    if (tried > 1) console.info(`Recovered using shard subset #${tried}.`);
 
-    document.getElementById('rpb').style.width = '40%';
-    st('rs2', 'inf', '<span class="sp"></span>Decrypting vault\u2026');
-    const zipBytes = await HorcruxCore.vaultDecrypt(_encData, pp);
-
-    document.getElementById('rpb').style.width = '70%';
-    st('rs2', 'inf', '<span class="sp"></span>Extracting files\u2026');
-    const entries = fflate.unzipSync(zipBytes);
+    document.getElementById('rpb').style.width = '60%';
+    st('rs2', 'inf', '<span class="sp"></span>Verifying integrity\u2026');
 
     const files = Object.keys(entries).filter(n => n !== 'Vault_Manifest.txt');
+
+    // Integrity check: every recovered file must match the SHA-256 recorded
+    // in Vault_Manifest.txt, and no listed file may be missing.
+    const manifestBytes = entries['Vault_Manifest.txt'];
+    if (!manifestBytes) {
+      throw new Error('Vault is missing its integrity manifest \u2014 cannot verify.');
+    }
+    const expected = {};
+    for (const line of new TextDecoder().decode(manifestBytes).split(/\r?\n/)) {
+      const m = line.match(/^([0-9a-f]{64})  (.+)$/);
+      if (m) expected[m[2]] = m[1];
+    }
+    const bad = [];
+    for (const name of files) {
+      const actual = await HorcruxCore.sha256hex(entries[name]);
+      if (!(name in expected)) bad.push(`${name}: not listed in manifest`);
+      else if (expected[name] !== actual) bad.push(`${name}: hash mismatch`);
+    }
+    for (const name of Object.keys(expected)) {
+      if (!files.includes(name)) bad.push(`${name}: listed in manifest but missing from vault`);
+    }
+    if (bad.length) throw new Error('Integrity check failed:\n  ' + bad.join('\n  '));
+
+    document.getElementById('rpb').style.width = '75%';
+    st('rs2', 'inf', '<span class="sp"></span>Extracting files\u2026');
 
     // Extract vault ID from shard string for folder name
     const sp = shards[0].split('-');
@@ -652,8 +716,13 @@ async function doRecover() {
         }
         savedTo = dirHandle.name;
       } catch (e) {
-        if (e.name !== 'AbortError') console.warn('File System Access failed:', e);
-        // Fall back to zip download
+        if (e.name === 'AbortError') {
+          st('rs2', 'err', 'Cancelled \u2014 no files were written.');
+          document.getElementById('rb').disabled = false;
+          document.getElementById('rp').style.display = 'none';
+          return;
+        }
+        console.warn('File System Access failed:', e);
         const zip = fflate.zipSync(_withDirEntries(entries, files));
         _downloadBlob(zip, 'Recovered_' + vid + '.zip', 'application/zip');
         savedTo = 'downloaded as Recovered_' + vid + '.zip';
@@ -667,7 +736,18 @@ async function doRecover() {
 
     document.getElementById('rpb').style.width = '100%';
     document.getElementById('rr').style.display = 'block';
-    document.getElementById('rfl').innerHTML = '<strong>Saved to:</strong> ' + savedTo + '<br><br>' + files.map(f => '&nbsp;&nbsp;' + f).join('<br>');
+    const rfl = document.getElementById('rfl');
+    rfl.replaceChildren();
+    const lbl = document.createElement('strong');
+    lbl.textContent = 'Saved to: ';
+    rfl.append(lbl, document.createTextNode(savedTo),
+      document.createElement('br'), document.createElement('br'));
+    for (const f of files) {
+      const row = document.createElement('div');
+      row.style.paddingLeft = '1em';
+      row.textContent = f;
+      rfl.append(row);
+    }
     st('rs2', 'ok', `${files.length} file(s) recovered successfully.`);
   } catch (e) {
     st('rs2', 'err', e.message);
