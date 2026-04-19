@@ -130,6 +130,17 @@ async function sha256hex(data) {
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Six-hex-character SHA-256 prefix of a shard string, used as a typo-detection
+// check code. Printed alongside the shard in restore_instructions.txt and
+// compared against at recovery time. Not a security-critical hash — the shard
+// string is public to its holder anyway.
+async function shardCheckCode(shardString) {
+  const bytes = new TextEncoder().encode(shardString.trim());
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return hex.slice(0, 6).toUpperCase();
+}
+
 
 // ═══════════════════════════════════════════════════════════════════
 // §2  GF(2^deg) SSSS + XTEA diffusion
@@ -393,6 +404,7 @@ if (typeof window !== 'undefined') {
     vaultDecrypt,
     vaultFormat,
     sha256hex,
+    shardCheckCode,
     splitSecret,
     joinSecret,
   };

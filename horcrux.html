@@ -42,12 +42,18 @@ input:focus{border-color:var(--accent)}
 .drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .drop:hover,.drop.drag{border-color:var(--accent);color:var(--accent);background:#eef3f0}
 .drop.ld{border-color:var(--gold);color:var(--accent);background:#f5f3ec}
-.sr{display:flex;gap:7px;align-items:center;margin-bottom:7px}
+.sr{display:flex;gap:7px;align-items:center;margin-bottom:7px;flex-wrap:wrap}
 .sn{font-family:var(--mono);font-size:12px;color:#bbb;width:20px;flex-shrink:0;text-align:right}
-.si{flex:1;font-family:var(--mono);font-size:11px;padding:7px 9px;border:1px solid var(--rule);
+.si{flex:1;min-width:200px;font-family:var(--mono);font-size:11px;padding:7px 9px;border:1px solid var(--rule);
   border-radius:2px;background:var(--cream);color:var(--ink);outline:none}
 .si:focus{border-color:var(--accent)}.si.v{border-color:var(--gold)}.si.bad{border-color:var(--red)}
+.sch{width:82px;font-family:var(--mono);font-size:11px;padding:7px 9px;border:1px solid var(--rule);
+  border-radius:2px;background:var(--cream);color:var(--ink);outline:none;text-align:center;letter-spacing:.05em;flex-shrink:0}
+.sch:focus{border-color:var(--accent)}
+.sci{min-width:18px;font-size:16px;font-weight:bold;flex-shrink:0;text-align:center;color:transparent}
+.sci.ok{color:var(--accent)}.sci.bad{color:var(--red)}
 .sc{background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:0 2px}.sc:hover{color:var(--red)}
+.cc{font-family:var(--mono);font-size:11px;color:#888;margin-top:4px;letter-spacing:.05em}
 .dice-wrap{display:flex;gap:8px;align-items:flex-end;margin-bottom:10px}
 .di{width:90px;font-family:var(--mono);font-size:20px;padding:8px;text-align:center;
   border:1px solid var(--rule);border-radius:2px;background:var(--cream);letter-spacing:.1em}
@@ -149,7 +155,7 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
     <li>Put any one of the USB drives into a computer and open <code>horcrux.html</code> from it (double-click, or right-click &rarr; Open with &rarr; any browser). No internet needed. No installation needed.</li>
     <li>Go to the <strong>Recover Vault</strong> tab.</li>
     <li>Set <strong>Threshold (k)</strong> to the number shown on any USB&rsquo;s <code>restore_instructions.txt</code>.</li>
-    <li>For each holder&rsquo;s USB, open their <code>XX_N.txt</code> file (where <code>XX</code> is the vault ID and <code>N</code> is the shard number) and paste the line into one of the shard boxes.</li>
+    <li>For each holder&rsquo;s USB, open their <code>XX_N.txt</code> file (where <code>XX</code> is the vault ID and <code>N</code> is the shard number) and paste the line into one of the shard boxes. Optionally, type the 6-character <strong>Check code</strong> from that USB&rsquo;s <code>restore_instructions.txt</code> into the small box next to the shard &mdash; a green <span style="color:var(--accent);font-weight:bold">&#10003;</span> confirms a clean paste and a red <span style="color:var(--red);font-weight:bold">&#10007;</span> flags a likely typo before you proceed.</li>
     <li>Click <strong>Combine Shards</strong>. The 5-word passphrase should appear. If it doesn&rsquo;t, check the pasted shards for typos. You can supply more than the threshold &mdash; the tool will tolerate one typo when you do.</li>
     <li>Under <strong>Encrypted Vault File</strong>, pick <code>Vault_XX.enc</code> from any of the USBs (they&rsquo;re all identical copies).</li>
     <li>Click <strong>Unlock Vault</strong>. On Chrome or Edge you choose where to save the recovered files; on Firefox or Safari the files download as a zip.</li>
@@ -485,6 +491,7 @@ async function doCreate() {
     st('cs', 'inf', '<span class="sp"></span>Splitting passphrase into shards\u2026');
     document.getElementById('cpb').style.width = '80%';
     const shards = HorcruxCore.splitSecret(_pp, n, k, vid);
+    const checkCodes = await Promise.all(shards.map(s => HorcruxCore.shardCheckCode(s)));
 
     let savedTo = '';
     let needsDownload = false;
@@ -497,7 +504,7 @@ async function doCreate() {
           await _writeFile(shardDir, 'Vault_' + vid + '.enc', enc);
           await _writeFile(shardDir, vid + '_' + (i + 1) + '.txt', new TextEncoder().encode(shards[i]));
           await _writeFile(shardDir, 'restore_instructions.txt', new TextEncoder().encode(
-            _instructions(vid, i + 1, n, k, shards[i])
+            _instructions(vid, i + 1, n, k, shards[i], checkCodes[i])
           ));
         }
         savedTo = dirHandle.name + '/' + vid;
@@ -527,14 +534,16 @@ async function doCreate() {
       ci.textContent = `Shard ${i + 1} of ${n}`;
       const cv = document.createElement('div'); cv.className = 'cv';
       cv.textContent = s;
-      d.append(ci, cv);
+      const cc = document.createElement('div'); cc.className = 'cc';
+      cc.textContent = `Check code: ${checkCodes[i]}`;
+      d.append(ci, cv, cc);
       if (needsDownload) {
         const btn = document.createElement('button');
         btn.className = 'btn g';
         btn.style.cssText = 'margin-top:8px;font-size:13px;padding:6px 14px';
         btn.textContent = `Download Shard ${i + 1}`;
         btn.onclick = () => {
-          _downloadOneShardZip(vid, i + 1, n, k, enc, s);
+          _downloadOneShardZip(vid, i + 1, n, k, enc, s, checkCodes[i]);
           btn.textContent = `\u2713 Downloaded \u2014 click to re-download`;
         };
         d.append(btn);
@@ -564,7 +573,7 @@ async function _writeFile(dirHandle, name, data) {
   await ws.close();
 }
 
-function _instructions(vid, i, n, k, shard) {
+function _instructions(vid, i, n, k, shard, checkCode) {
   return (
 `YOUR HORCRUX KEY \u2014 Piece ${i} of ${n}
 Vault "${vid}"   (Requires any ${k} of ${n} pieces to unlock)
@@ -643,6 +652,13 @@ THIS USB'S KEY PIECE   (do not share, do not lose)
 
    ${shard}
 
+   Check code:   ${checkCode}
+
+   At recovery time, the tool displays a 6-character Check code
+   next to each shard as it is typed in. If the code the tool
+   shows matches the one above, the shard was typed correctly.
+   If it doesn't match, double-check for typos before continuing.
+
 
 WHAT IF...
 
@@ -675,12 +691,12 @@ never need to open it. If you do, this page tells you how.
 `).replace(/\n/g, '\r\n');
 }
 
-function _downloadOneShardZip(vid, i, n, k, enc, shardString) {
+function _downloadOneShardZip(vid, i, n, k, enc, shardString, checkCode) {
   const entries = {};
   entries['Vault_' + vid + '.enc'] = enc;
   entries[vid + '_' + i + '.txt'] = new TextEncoder().encode(shardString);
   entries['restore_instructions.txt'] = new TextEncoder().encode(
-    _instructions(vid, i, n, k, shardString)
+    _instructions(vid, i, n, k, shardString, checkCode)
   );
   const zip = fflate.zipSync(entries, { level: 6 });
   _downloadBlob(zip, 'Vault_' + vid + '_Shard_' + i + '.zip', 'application/zip');
@@ -762,13 +778,50 @@ function bsh() {
 function ash() {
   const c = document.getElementById('rs'); const n = c.children.length + 1;
   const r = document.createElement('div'); r.className = 'sr';
-  r.innerHTML = `<span class="sn">${n}.</span><input class="si" placeholder="AB-${n}-3D97\u2026" oninput="vs(this)" spellcheck="false"><button class="sc" onclick="this.previousElementSibling.value='';this.previousElementSibling.className='si'">\u00d7</button>`;
+  r.innerHTML = `<span class="sn">${n}.</span>` +
+    `<input class="si" placeholder="AB-${n}-3D97\u2026" oninput="vs(this.parentElement)" spellcheck="false">` +
+    `<input class="sch" placeholder="Check" maxlength="6" title="6-character check code from the shard's restore_instructions.txt (optional)" oninput="this.value=this.value.toUpperCase().replace(/[^0-9A-F]/g,'');vs(this.parentElement)">` +
+    `<span class="sci"></span>` +
+    `<button class="sc" onclick="clrRow(this)">\u00d7</button>`;
   c.appendChild(r);
 }
-function vs(inp) {
-  const v = inp.value.trim(); if (!v) { inp.className = 'si'; return; }
+function clrRow(btn) {
+  const r = btn.closest('.sr');
+  r.querySelector('.si').value = '';
+  r.querySelector('.si').className = 'si';
+  r.querySelector('.sch').value = '';
+  const sci = r.querySelector('.sci');
+  sci.textContent = '';
+  sci.className = 'sci';
+}
+async function vs(row) {
+  const siEl = row.querySelector('.si');
+  const schEl = row.querySelector('.sch');
+  const sciEl = row.querySelector('.sci');
+  const v = siEl.value.trim();
+  if (!v) {
+    siEl.className = 'si';
+    sciEl.textContent = ''; sciEl.className = 'sci';
+    return;
+  }
   const p = v.split('-');
-  inp.className = 'si ' + (p.length >= 3 && /^\d+$/.test(p[p.length - 2]) && /^[0-9A-Fa-f]+$/.test(p[p.length - 1]) ? 'v' : 'bad');
+  const formatOk = p.length >= 3 && /^\d+$/.test(p[p.length - 2]) && /^[0-9A-Fa-f]+$/.test(p[p.length - 1]);
+  siEl.className = 'si ' + (formatOk ? 'v' : 'bad');
+
+  const expected = (schEl.value || '').trim().toUpperCase();
+  if (!formatOk || expected.length < 6) {
+    sciEl.textContent = ''; sciEl.className = 'sci';
+    return;
+  }
+  const computed = await HorcruxCore.shardCheckCode(v);
+  if (siEl.value.trim() !== v) return;  // user typed more while we hashed
+  if (computed === expected) {
+    sciEl.textContent = '\u2713'; sciEl.className = 'sci ok';
+    sciEl.title = 'Check code matches';
+  } else {
+    sciEl.textContent = '\u2717'; sciEl.className = 'sci bad';
+    sciEl.title = `Check code mismatch (computed ${computed}) \u2014 likely a typo in the shard or check code`;
+  }
 }
 
 async function doRecover() {
