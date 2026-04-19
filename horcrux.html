@@ -483,6 +483,7 @@ async function doCreate() {
       d.append(ci, cv);
       sl.appendChild(d);
     });
+    document.getElementById('cb').disabled = false;
     st('cs', 'ok', `Vault ${vid} created \u2014 ${savedTo}<br>${n} shards, threshold ${k}.`);
   } catch (e) {
     st('cs', 'err', e.message);
@@ -733,6 +734,7 @@ async function doRecover() {
       row.textContent = f;
       rfl.append(row);
     }
+    document.getElementById('rb').disabled = false;
     st('rs2', 'ok', `${files.length} file(s) recovered successfully.`);
   } catch (e) {
     st('rs2', 'err', e.message);
