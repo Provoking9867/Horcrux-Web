@@ -664,16 +664,20 @@ async function doRecover() {
       const m = line.match(/^([0-9a-f]{64})  (.+)$/);
       if (m) expected[m[2]] = m[1];
     }
-    const bad = [];
+    let failed = false;
+    const debugDetails = [];
     for (const name of files) {
       const actual = await HorcruxCore.sha256hex(entries[name]);
-      if (!(name in expected)) bad.push(`${name}: not listed in manifest`);
-      else if (expected[name] !== actual) bad.push(`${name}: hash mismatch`);
+      if (!(name in expected)) { failed = true; debugDetails.push(`${name}: not in manifest`); }
+      else if (expected[name] !== actual) { failed = true; debugDetails.push(`${name}: hash mismatch`); }
     }
     for (const name of Object.keys(expected)) {
-      if (!files.includes(name)) bad.push(`${name}: listed in manifest but missing from vault`);
+      if (!files.includes(name)) { failed = true; debugDetails.push(`${name}: listed in manifest but missing`); }
     }
-    if (bad.length) throw new Error('Integrity check failed:\n  ' + bad.join('\n  '));
+    if (failed) {
+      console.warn('Horcrux integrity check details:', debugDetails);
+      throw new Error('Integrity check failed \u2014 the vault has been tampered with or is corrupted. No files were written.');
+    }
 
     document.getElementById('rpb').style.width = '75%';
     st('rs2', 'inf', '<span class="sp"></span>Extracting files\u2026');
