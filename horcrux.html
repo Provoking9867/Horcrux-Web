@@ -455,9 +455,8 @@ async function doCreate() {
     document.getElementById('cpb').style.width = '80%';
     const shards = HorcruxCore.splitSecret(_pp, n, k, vid);
 
-    // Build and download shard zips
-    // Try File System Access API first, fall back to individual zip downloads
     let savedTo = '';
+    let needsDownload = false;
     if (window.showDirectoryPicker) {
       try {
         const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -478,11 +477,14 @@ async function doCreate() {
           document.getElementById('cp').style.display = 'none';
           return;
         }
-        console.warn('File System Access failed, falling back to zip download:', e);
-        savedTo = await _downloadShardZips(vid, n, k, enc, shards);
+        console.warn('File System Access failed, falling back to per-shard downloads:', e);
+        needsDownload = true;
       }
     } else {
-      savedTo = await _downloadShardZips(vid, n, k, enc, shards);
+      needsDownload = true;
+    }
+    if (needsDownload) {
+      savedTo = 'click each Download button below to save the shard package to your Downloads folder';
     }
 
     document.getElementById('cpb').style.width = '100%';
@@ -495,8 +497,26 @@ async function doCreate() {
       const cv = document.createElement('div'); cv.className = 'cv';
       cv.textContent = s;
       d.append(ci, cv);
+      if (needsDownload) {
+        const btn = document.createElement('button');
+        btn.className = 'btn g';
+        btn.style.cssText = 'margin-top:8px;font-size:13px;padding:6px 14px';
+        btn.textContent = `Download Shard ${i + 1}`;
+        btn.onclick = () => {
+          _downloadOneShardZip(vid, i + 1, n, k, enc, s);
+          btn.textContent = `\u2713 Downloaded \u2014 click to re-download`;
+        };
+        d.append(btn);
+      }
       sl.appendChild(d);
     });
+    if (needsDownload) {
+      const note = document.createElement('div');
+      note.className = 'st inf on';
+      note.style.marginTop = '10px';
+      note.innerHTML = 'If Windows Explorer\u2019s <em>Extract All</em> fails with error 0x80004005, use <strong>7-Zip</strong> or PowerShell <code>Expand-Archive</code> \u2014 the zips are valid, Explorer is finicky.';
+      sl.appendChild(note);
+    }
     document.getElementById('cb').disabled = false;
     st('cs', 'ok', `Vault ${vid} created \u2014 ${savedTo}<br>${n} shards, threshold ${k}.`);
   } catch (e) {
@@ -541,23 +561,15 @@ Keep this USB drive safe. Do not share this string.
 `).replace(/\n/g, '\r\n');
 }
 
-async function _downloadShardZips(vid, n, k, enc, shards) {
-  // One flat zip per shard, each directly copyable to a USB drive. Windows
-  // Explorer's built-in extractor trips (0x80004005) on the deeper nested
-  // structure a single master zip would produce, so we split it up.
-  st('cs', 'inf', `<span class="sp"></span>Downloading ${n} shard packages \u2014 please allow multiple downloads if prompted\u2026`);
-  for (let i = 0; i < n; i++) {
-    const entries = {};
-    entries['Vault_' + vid + '.enc'] = enc;
-    entries[vid + '_' + (i + 1) + '.txt'] = new TextEncoder().encode(shards[i]);
-    entries['restore_instructions.txt'] = new TextEncoder().encode(
-      _instructions(vid, i + 1, n, k, shards[i])
-    );
-    const zip = fflate.zipSync(entries, { level: 6 });
-    _downloadBlob(zip, 'Vault_' + vid + '_Shard_' + (i + 1) + '.zip', 'application/zip');
-    await new Promise(r => setTimeout(r, 300));
-  }
-  return `${n} downloads (Vault_${vid}_Shard_1.zip through _Shard_${n}.zip)`;
+function _downloadOneShardZip(vid, i, n, k, enc, shardString) {
+  const entries = {};
+  entries['Vault_' + vid + '.enc'] = enc;
+  entries[vid + '_' + i + '.txt'] = new TextEncoder().encode(shardString);
+  entries['restore_instructions.txt'] = new TextEncoder().encode(
+    _instructions(vid, i, n, k, shardString)
+  );
+  const zip = fflate.zipSync(entries, { level: 6 });
+  _downloadBlob(zip, 'Vault_' + vid + '_Shard_' + i + '.zip', 'application/zip');
 }
 
 function _downloadBlob(data, filename, mime) {
@@ -607,7 +619,7 @@ function doCombine() {
     if (!pp) throw new Error('Could not reconstruct passphrase. Check shard strings and threshold count.');
     if (!_looksLikeDiceware(pp)) {
       document.getElementById('ckr').style.display = 'none';
-      throw new Error('Reconstructed passphrase does not match the 5-word diceware format. One or more shards may be wrong, or the threshold may be incorrect.');
+      throw new Error('Could not reconstruct the passphrase. Check the shard strings and threshold.');
     }
     document.getElementById('ckv').textContent = pp;
     document.getElementById('ckr').style.display = 'block';
