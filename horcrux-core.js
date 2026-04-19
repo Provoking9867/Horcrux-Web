@@ -282,6 +282,14 @@ function _bytesToBigInt(bytes) {
 // ── split / join ──
 
 function splitSecret(secret, total, threshold, vaultId) {
+  if (!Number.isInteger(total) || !Number.isInteger(threshold))
+    throw new Error('total and threshold must be integers');
+  if (threshold < 1) throw new Error('threshold must be at least 1');
+  if (total < threshold) throw new Error('total shards must be at least threshold');
+  if (total > 255) throw new Error('total shards must be at most 255');
+  if (typeof secret !== 'string' || secret.length === 0)
+    throw new Error('secret must be a non-empty string');
+
   const deg = _sl(secret);
   const poly = _poly(deg);
   const bl = deg / 8;
@@ -318,6 +326,8 @@ function splitSecret(secret, total, threshold, vaultId) {
 }
 
 function joinSecret(shardStrings, threshold) {
+  if (!Number.isInteger(threshold) || threshold < 1) return null;
+  if (!Array.isArray(shardStrings)) return null;
   const parsed = [];
   for (const s of shardStrings) {
     const parts = s.trim().split('-');

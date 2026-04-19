@@ -116,7 +116,7 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
   <h2>Creating a vault &mdash; step by step</h2>
   <ol>
     <li>Click the <strong>Create Vault</strong> tab above.</li>
-    <li>Enter a <strong>Vault ID</strong> &mdash; any two characters like <code>A1</code> or <code>FF</code>. This just names the vault.</li>
+    <li>Enter a <strong>Vault ID</strong> &mdash; a short name for this vault, 2&ndash;20 characters, uppercase letters, digits, and hyphens (e.g. <code>MOM-2026</code> or <code>RETIREMENT-DOCS</code>). Pick something descriptive so shard holders can tell one vault from another if they ever hold shards for more than one.</li>
     <li>Click <em>Choose folder</em> and select the folder you want to protect.</li>
     <li>Choose <strong>Total shards</strong> (how many USB drives to make) and <strong>Threshold</strong> (how many are needed to unlock). A common choice is 5 shards with a threshold of 3 &mdash; any 3 of the 5 people can unlock the vault.</li>
     <li>Roll 5 physical dice five times and type each roll into the passphrase generator to build a 5-word diceware passphrase.</li>
@@ -270,7 +270,7 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
 
 <!-- CREATE -->
 <div class="pn" id="pc">
-  <div class="fi"><label>Vault ID (2 hex chars, e.g. A1)</label><input type="text" id="vid" maxlength="2" placeholder="A1" style="text-transform:uppercase;max-width:160px" oninput="this.value=this.value.toUpperCase()"></div>
+  <div class="fi"><label>Vault ID (2&ndash;20 chars, letters/digits/hyphens &mdash; e.g. MOM-2026)</label><input type="text" id="vid" maxlength="20" placeholder="MOM-2026" style="text-transform:uppercase;max-width:320px" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9-]/g,'')"></div>
   <div class="fi">
     <label>Folder to encrypt</label>
     <div class="drop" id="df"><input type="file" id="fi" webkitdirectory multiple onchange="onFolder(this)">
@@ -364,8 +364,8 @@ let _folderName = null;
 async function onFolder(inp) {
   if (!inp.files.length) return;
   const vid = document.getElementById('vid').value.toUpperCase().trim();
-  if (!/^[0-9A-F]{2}$/.test(vid)) {
-    alert('Enter a valid Vault ID (2 hex chars) before selecting a folder.');
+  if (!/^[A-Z0-9]+(-[A-Z0-9]+)*$/.test(vid) || vid.length < 2 || vid.length > 20) {
+    alert('Enter a valid Vault ID before selecting a folder (2\u201320 characters, A\u2013Z, 0\u20139, hyphens; no leading/trailing/double hyphens).');
     inp.value = '';
     return;
   }
@@ -417,7 +417,7 @@ async function doCreate() {
   const n = parseInt(document.getElementById('ns').value, 10);
   const k = parseInt(document.getElementById('kt').value, 10);
   if (!_files || !_files.length) { st('cs', 'err', 'Please select a folder first.'); return; }
-  if (!/^[0-9A-F]{2}$/.test(vid)) { st('cs', 'err', 'Vault ID must be 2 hex characters, e.g. A1 or FF.'); return; }
+  if (!/^[A-Z0-9]+(-[A-Z0-9]+)*$/.test(vid) || vid.length < 2 || vid.length > 20) { st('cs', 'err', 'Vault ID must be 2\u201320 characters (A\u2013Z, 0\u20139, hyphens; no leading/trailing/double hyphens), e.g. MOM-2026.'); return; }
   if (isNaN(n) || isNaN(k) || k < 2 || k > n || n > 20) { st('cs', 'err', 'Invalid n/k: ensure 2 \u2264 k \u2264 n \u2264 20.'); return; }
   if (!_pp) { st('cs', 'err', 'Complete the diceware passphrase (5 words) first.'); return; }
 
