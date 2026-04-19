@@ -194,6 +194,11 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
     <li>The XTEA diffusion is reversed.</li>
     <li>The resulting bytes are decoded as UTF-8 to recover the passphrase.</li>
   </ol>
+  <p>Shamir&rsquo;s scheme by itself produces <em>some</em> output for any <em>k</em> shard points; wrong shards yield garbage. The recovery UI guards against this in two ways:</p>
+  <ul>
+    <li><strong>Subset retry.</strong> When more than <em>k</em> shards are supplied, the UI tries every <em>k</em>-subset in turn and keeps the first one whose reconstructed passphrase successfully decrypts the vault. A single mistyped shard among (say) five supplied for a 3-of-5 vault still recovers.</li>
+    <li><strong>Diceware sanity check.</strong> On the Combine Shards tab, the reconstructed passphrase is checked against the 5-word EFF diceware format (five hyphen-separated tokens, each in the EFF Large Wordlist). If it doesn&rsquo;t match, the UI reports a generic &ldquo;could not reconstruct&rdquo; error rather than displaying garbage. This is a heuristic for UX, not a cryptographic check; the Recover flow still uses HMAC and manifest as the authoritative gate.</li>
+  </ul>
 
   <h3>Field arithmetic</h3>
   <p>All arithmetic operates in GF(2^deg) using irreducible polynomials from a hardcoded table of 128 pentanomials (degree 8 through 1024). Multiplication uses the standard shift-and-XOR algorithm. Inversion uses the Extended Euclidean Algorithm with modular reduction of the Bezout cofactor.</p>
@@ -225,13 +230,19 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
     <tr><td>16</td><td>remainder</td><td>AES-256-CBC ciphertext (PKCS#7 padded)</td></tr>
   </table>
 
+  <h2>Vault Manifest</h2>
+  <p>Inside the encrypted zip, a <code>Vault_Manifest.txt</code> file records the SHA-256 of every other file:</p>
+  <p style="font-family:var(--mono);font-size:13px;padding:8px 12px;background:var(--cream);border:1px solid var(--rule);border-radius:2px"><em>64-hex-hash</em>&nbsp;&nbsp;<em>relative/path/to/file</em><br><em>64-hex-hash</em>&nbsp;&nbsp;<em>&hellip;</em></p>
+  <p>On recovery, after the ciphertext decrypts and the zip unpacks, every file&rsquo;s SHA-256 is recomputed and compared to the manifest. A mismatch (or a missing / unexpected entry) aborts recovery with a generic &ldquo;vault has been tampered with or is corrupted&rdquo; message &mdash; no files are written to disk. This is a secondary integrity gate behind the Horcrux1 HMAC tag; for legacy <code>Salted__</code> vaults (no HMAC), the manifest is the only integrity check.</p>
+
   <h2>Shard String Format</h2>
   <p>Each shard is a string of the form:</p>
   <p style="font-family:var(--mono);font-size:14px;padding:8px 12px;background:var(--cream);border:1px solid var(--rule);border-radius:2px"><em>VaultID</em>-<em>N</em>-<em>HEX</em></p>
-  <p>Where <em>VaultID</em> is the user-chosen identifier, <em>N</em> is the shard number (1-based), and <em>HEX</em> is the uppercase hexadecimal representation of the polynomial evaluation y<sub>N</sub> in GF(2^deg), zero-padded to <em>deg/4</em> characters.</p>
+  <p>Where <em>VaultID</em> is the user-chosen identifier (2&ndash;20 characters of <code>A&ndash;Z</code>, <code>0&ndash;9</code>, and hyphens; no leading, trailing, or consecutive hyphens), <em>N</em> is the shard number (1-based), and <em>HEX</em> is the uppercase hexadecimal representation of the polynomial evaluation y<sub>N</sub> in GF(2^deg), zero-padded to <em>deg/4</em> characters. The join parser splits from the right, so the VaultID itself may contain hyphens.</p>
 
   <h2>File Output</h2>
-  <p>On Chromium-based browsers (Chrome, Edge, Opera), Horcrux uses the <strong>File System Access API</strong> to write shard folders directly to a user-chosen directory. On all other browsers (Firefox, Safari), the output is packaged as a zip file and downloaded.</p>
+  <p>On Chromium-based browsers (Chrome, Edge, Opera), Horcrux uses the <strong>File System Access API</strong> to write shard folders directly to a user-chosen directory &mdash; one folder per shard containing <code>Vault_XX.enc</code>, the shard&rsquo;s <code>.txt</code> file, and <code>restore_instructions.txt</code>.</p>
+  <p>On browsers without that API (Firefox, Safari) or when the user cancels the directory picker, the results page falls back to per-shard Download buttons. Each button produces one flat zip (<code>Vault_XX_Shard_N.zip</code>) containing the same three files, ready to copy directly onto a USB drive. The user paces the downloads manually &mdash; no multi-download prompt.</p>
 
   <h2>Compatibility</h2>
   <p>Shard strings (Shamir split/combine) remain interchangeable with the Python edition (<code>horcrux.py</code>). Vault ciphertext is <strong>no longer interchangeable</strong>: this edition emits the authenticated <code>Horcrux1</code> format, which <code>horcrux.py</code> v1.2 cannot decrypt. Legacy <code>Salted__</code> vaults written by <code>horcrux.py</code> remain readable here (with a UI warning).</p>
@@ -254,7 +265,9 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
 
   <div class="ref"><h4>Cryptographic Primitives</h4>
   <p><strong>AES-256-CBC</strong> &mdash; NIST FIPS 197 (Advanced Encryption Standard) and SP 800-38A (Block Cipher Modes). Implemented via the browser&rsquo;s Web Crypto API (<code>SubtleCrypto</code>).</p>
-  <p><strong>PBKDF2-HMAC-SHA256</strong> &mdash; RFC 8018 (PKCS #5 v2.1). 100,000 iterations. Implemented via the browser&rsquo;s Web Crypto API.</p>
+  <p><strong>PBKDF2-HMAC-SHA256</strong> &mdash; RFC 8018 (PKCS #5 v2.1). 600,000 iterations for the Horcrux1 format; 100,000 iterations when reading legacy <code>Salted__</code> vaults. Implemented via the browser&rsquo;s Web Crypto API.</p>
+  <p><strong>HMAC-SHA256</strong> &mdash; RFC 2104 (HMAC) and FIPS 180-4 (SHA-256). Authenticates the Horcrux1 vault container in an encrypt-then-MAC construction.</p>
+  <p><strong>SHA-256</strong> &mdash; FIPS 180-4. Used for the per-file integrity manifest (<code>Vault_Manifest.txt</code>).</p>
   <p><strong>XTEA</strong> &mdash; Wheeler, D. and Needham, R. (1997). &ldquo;Tea extensions.&rdquo; Technical report, Computer Laboratory, University of Cambridge.</p>
   </div>
 
