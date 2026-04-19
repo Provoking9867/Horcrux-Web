@@ -33,45 +33,94 @@ if (typeof BigInt === 'undefined') {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// §1  AES-256-CBC + PBKDF2  (via Web Crypto API)
-//     OpenSSL-compatible: Salted__ + 8-byte salt + ciphertext
+// §1  AES-256-CBC + PBKDF2 + HMAC-SHA256  (via Web Crypto API)
+//
+// Horcrux1 format (v2 — produced by this version):
+//   [8B 'Horcrux1'] [16B salt] [ciphertext] [32B HMAC-SHA256 tag]
+//   PBKDF2-HMAC-SHA256, 600,000 iters, 80B out → 32B AES key | 16B IV | 32B MAC key
+//   Encrypt-then-MAC: tag = HMAC(macKey, magic || salt || ciphertext)
+//
+// Legacy OpenSSL format (read-only — warns user, encourages re-encrypt):
+//   [8B 'Salted__'] [8B salt] [ciphertext]
+//   PBKDF2-HMAC-SHA256, 100,000 iters, 48B out → 32B AES key | 16B IV  (no HMAC)
 // ═══════════════════════════════════════════════════════════════════
 
 async function vaultEncrypt(plaintext, passphrase) {
   const enc = new TextEncoder();
-  const salt = crypto.getRandomValues(new Uint8Array(8));
-  const ki = await _deriveKeyIV(enc.encode(passphrase), salt);
-  const key = await crypto.subtle.importKey('raw', ki.slice(0, 32), 'AES-CBC', false, ['encrypt']);
-  const ct = await crypto.subtle.encrypt({ name: 'AES-CBC', iv: ki.slice(32, 48) }, key, plaintext);
-  // Assemble: "Salted__" + salt + ciphertext
-  const header = enc.encode('Salted__');
-  const out = new Uint8Array(header.length + salt.length + ct.byteLength);
-  out.set(header, 0);
+  const magic = enc.encode('Horcrux1');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const mat = await _deriveKeyIV(enc.encode(passphrase), salt, 600000, 80);
+  const aesKey = await crypto.subtle.importKey('raw', mat.slice(0, 32), 'AES-CBC', false, ['encrypt']);
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-CBC', iv: mat.slice(32, 48) }, aesKey, plaintext));
+  const macKey = await crypto.subtle.importKey('raw', mat.slice(48, 80),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const toMac = new Uint8Array(magic.length + salt.length + ct.length);
+  toMac.set(magic, 0);
+  toMac.set(salt, magic.length);
+  toMac.set(ct, magic.length + salt.length);
+  const tag = new Uint8Array(await crypto.subtle.sign('HMAC', macKey, toMac));
+  const out = new Uint8Array(magic.length + salt.length + ct.length + tag.length);
+  out.set(magic, 0);
   out.set(salt, 8);
-  out.set(new Uint8Array(ct), 16);
+  out.set(ct, 24);
+  out.set(tag, 24 + ct.length);
   return out;
 }
 
 async function vaultDecrypt(data, passphrase) {
-  const header = new TextDecoder().decode(data.slice(0, 8));
-  if (header !== 'Salted__') throw new Error('Not a valid Horcrux vault file.');
+  const fmt = vaultFormat(data);
+  if (fmt === 'v1') return _decryptV1(data, passphrase);
+  if (fmt === 'legacy') return _decryptLegacy(data, passphrase);
+  throw new Error('Not a valid Horcrux vault file.');
+}
+
+function vaultFormat(data) {
+  if (!data || data.length < 8) return null;
+  const magic = new TextDecoder().decode(data.slice(0, 8));
+  if (magic === 'Horcrux1') return 'v1';
+  if (magic === 'Salted__') return 'legacy';
+  return null;
+}
+
+async function _decryptV1(data, passphrase) {
+  if (data.length < 8 + 16 + 32) throw new Error('Vault file is too short to be a valid Horcrux1 file.');
+  const salt = data.slice(8, 24);
+  const ct = data.slice(24, data.length - 32);
+  const tag = data.slice(data.length - 32);
+  const mat = await _deriveKeyIV(new TextEncoder().encode(passphrase), salt, 600000, 80);
+  const macKey = await crypto.subtle.importKey('raw', mat.slice(48, 80),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+  const toMac = new Uint8Array(8 + salt.length + ct.length);
+  toMac.set(data.slice(0, 8), 0);
+  toMac.set(salt, 8);
+  toMac.set(ct, 8 + salt.length);
+  const ok = await crypto.subtle.verify('HMAC', macKey, tag, toMac);
+  if (!ok) throw new Error('Decryption failed \u2014 wrong passphrase or vault has been tampered with.');
+  const aesKey = await crypto.subtle.importKey('raw', mat.slice(0, 32), 'AES-CBC', false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: mat.slice(32, 48) }, aesKey, ct);
+  return new Uint8Array(pt);
+}
+
+async function _decryptLegacy(data, passphrase) {
+  if (data.length < 16) throw new Error('Legacy vault file is too short to be valid.');
   const salt = data.slice(8, 16);
   const ct = data.slice(16);
-  const ki = await _deriveKeyIV(new TextEncoder().encode(passphrase), salt);
-  const key = await crypto.subtle.importKey('raw', ki.slice(0, 32), 'AES-CBC', false, ['decrypt']);
+  const mat = await _deriveKeyIV(new TextEncoder().encode(passphrase), salt, 100000, 48);
+  const aesKey = await crypto.subtle.importKey('raw', mat.slice(0, 32), 'AES-CBC', false, ['decrypt']);
   try {
-    const pt = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: ki.slice(32, 48) }, key, ct);
+    const pt = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: mat.slice(32, 48) }, aesKey, ct);
     return new Uint8Array(pt);
   } catch (e) {
-    throw new Error('Decryption failed — wrong password?');
+    throw new Error('Decryption failed \u2014 wrong passphrase?');
   }
 }
 
-async function _deriveKeyIV(passBytes, salt) {
+async function _deriveKeyIV(passBytes, salt, iters, sizeBytes) {
   const baseKey = await crypto.subtle.importKey('raw', passBytes, 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' },
-    baseKey, 48 * 8  // 48 bytes = 32 key + 16 IV
+    { name: 'PBKDF2', salt: salt, iterations: iters, hash: 'SHA-256' },
+    baseKey, sizeBytes * 8
   );
   return new Uint8Array(bits);
 }
@@ -332,6 +381,7 @@ if (typeof window !== 'undefined') {
   window.HorcruxCore = {
     vaultEncrypt,
     vaultDecrypt,
+    vaultFormat,
     sha256hex,
     splitSecret,
     joinSecret,

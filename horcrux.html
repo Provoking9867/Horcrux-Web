@@ -166,9 +166,10 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
 
   <table>
     <tr><th>Component</th><th>Implementation</th><th>Notes</th></tr>
-    <tr><td>AES-256-CBC</td><td>Web Crypto API (<code>SubtleCrypto</code>)</td><td>Hardware-accelerated on most platforms. OpenSSL-compatible <code>Salted__</code> header format.</td></tr>
-    <tr><td>PBKDF2</td><td>Web Crypto API</td><td>SHA-256, 100,000 iterations, derives 48 bytes (32-byte key + 16-byte IV).</td></tr>
-    <tr><td>SHA-256</td><td>Web Crypto API</td><td>Used for the vault manifest (file integrity checksums).</td></tr>
+    <tr><td>AES-256-CBC</td><td>Web Crypto API (<code>SubtleCrypto</code>)</td><td>Hardware-accelerated on most platforms. Custom <code>Horcrux1</code> container; legacy <code>Salted__</code> (OpenSSL) accepted on read.</td></tr>
+    <tr><td>PBKDF2-HMAC-SHA256</td><td>Web Crypto API</td><td>600,000 iterations (Horcrux1), derives 80 bytes (32 AES key + 16 IV + 32 HMAC key). Legacy reads use 100,000 iterations / 48 bytes.</td></tr>
+    <tr><td>HMAC-SHA256</td><td>Web Crypto API</td><td>Authenticates the vault container (encrypt-then-MAC) in Horcrux1 format. Verified in constant time via <code>crypto.subtle.verify</code>.</td></tr>
+    <tr><td>SHA-256</td><td>Web Crypto API</td><td>Used for the vault manifest (file integrity checksums, checked on every recovery).</td></tr>
     <tr><td>Secret Sharing</td><td>Pure JavaScript (<code>BigInt</code>)</td><td>Shamir&rsquo;s Secret Sharing Scheme over GF(2^deg). See below.</td></tr>
     <tr><td>XTEA Diffusion</td><td>Pure JavaScript</td><td>64-bit block cipher used as a pseudo-random permutation on the secret before splitting.</td></tr>
     <tr><td>Zip/Unzip</td><td>fflate library</td><td>DEFLATE compression. Can be vendored locally for offline use.</td></tr>
@@ -202,14 +203,27 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
   <p>This layer is identical to the one used in ssss (B. Poettering, 2005), though the byte serialization order differs (big-endian in Horcrux, mixed-endian via GMP in ssss).</p>
 
   <h2>Encryption Format</h2>
-  <p>The vault file uses OpenSSL&rsquo;s <code>aes-256-cbc -salt -pbkdf2 -iter 100000</code> format:</p>
+
+  <h3>Horcrux1 (current)</h3>
+  <p>New vaults use an authenticated container with an HMAC-SHA256 tag over the entire ciphertext:</p>
+  <table>
+    <tr><th>Offset</th><th>Length</th><th>Content</th></tr>
+    <tr><td>0</td><td>8 bytes</td><td><code>Horcrux1</code> (ASCII magic)</td></tr>
+    <tr><td>8</td><td>16 bytes</td><td>Random salt</td></tr>
+    <tr><td>24</td><td>remainder &minus; 32</td><td>AES-256-CBC ciphertext (PKCS#7 padded)</td></tr>
+    <tr><td>end &minus; 32</td><td>32 bytes</td><td>HMAC-SHA256 tag over magic &Vert; salt &Vert; ciphertext</td></tr>
+  </table>
+  <p>Key derivation: PBKDF2-HMAC-SHA256 with the 16-byte salt, <strong>600,000 iterations</strong>, producing 80 bytes. The first 32 bytes are the AES key; the next 16 bytes are the CBC initialization vector; the last 32 bytes are the HMAC key.</p>
+  <p>Decryption verifies the HMAC tag in constant time before attempting AES decryption. A wrong passphrase or a modified ciphertext both surface as a single failure mode; the two cannot be distinguished.</p>
+
+  <h3>Legacy (OpenSSL, read-only)</h3>
+  <p>Vaults produced by earlier versions of this tool and by the Python edition (<code>horcrux.py</code> v1.2) use the OpenSSL <code>Salted__</code> format with PBKDF2 at 100,000 iterations and no HMAC. Horcrux1 reads those files with a visible UI warning; writing the legacy format is no longer supported. To upgrade a legacy vault, recover it and create a new vault with the same files.</p>
   <table>
     <tr><th>Offset</th><th>Length</th><th>Content</th></tr>
     <tr><td>0</td><td>8 bytes</td><td><code>Salted__</code> (ASCII magic)</td></tr>
     <tr><td>8</td><td>8 bytes</td><td>Random salt</td></tr>
     <tr><td>16</td><td>remainder</td><td>AES-256-CBC ciphertext (PKCS#7 padded)</td></tr>
   </table>
-  <p>Key derivation: PBKDF2-HMAC-SHA256 with the salt, 100,000 iterations, producing 48 bytes. The first 32 bytes are the AES key; the last 16 bytes are the CBC initialization vector.</p>
 
   <h2>Shard String Format</h2>
   <p>Each shard is a string of the form:</p>
@@ -220,7 +234,7 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
   <p>On Chromium-based browsers (Chrome, Edge, Opera), Horcrux uses the <strong>File System Access API</strong> to write shard folders directly to a user-chosen directory. On all other browsers (Firefox, Safari), the output is packaged as a zip file and downloaded.</p>
 
   <h2>Compatibility</h2>
-  <p>Vaults and shards produced by this browser edition are <strong>byte-identical and interchangeable</strong> with those produced by the Python edition (<code>horcrux.py</code>). The same passphrase, salt, and coefficients will produce the same encrypted vault and the same shard strings.</p>
+  <p>Shard strings (Shamir split/combine) remain interchangeable with the Python edition (<code>horcrux.py</code>). Vault ciphertext is <strong>no longer interchangeable</strong>: this edition emits the authenticated <code>Horcrux1</code> format, which <code>horcrux.py</code> v1.2 cannot decrypt. Legacy <code>Salted__</code> vaults written by <code>horcrux.py</code> remain readable here (with a UI warning).</p>
   <p>Shards are <strong>not compatible</strong> with B. Poettering&rsquo;s <code>ssss-split</code>/<code>ssss-combine</code> tools due to differences in polynomial structure (monic vs. random leading coefficient) and byte serialization order in the XTEA diffusion layer.</p>
 
   <h2>Credits &amp; References</h2>
@@ -626,6 +640,10 @@ async function doRecover() {
   st('rs2', 'inf', '<span class="sp"></span>Reconstructing key\u2026');
 
   try {
+    const fmt = HorcruxCore.vaultFormat(_encData);
+    if (!fmt) throw new Error('File is not a valid Horcrux vault.');
+    const isLegacy = (fmt === 'legacy');
+
     // Try every k-subset of supplied shards until one decrypts + unzips.
     // Tolerates one (or more) mistyped shard when the user supplies extras.
     let pp = null, zipBytes = null, entries = null, lastErr = null, tried = 0;
@@ -735,7 +753,11 @@ async function doRecover() {
       rfl.append(row);
     }
     document.getElementById('rb').disabled = false;
-    st('rs2', 'ok', `${files.length} file(s) recovered successfully.`);
+    if (isLegacy) {
+      st('rs2', 'warn', `${files.length} file(s) recovered. <strong>Legacy vault format</strong> \u2014 no HMAC authentication. Consider re-encrypting by creating a new vault with the same files.`);
+    } else {
+      st('rs2', 'ok', `${files.length} file(s) recovered successfully.`);
+    }
   } catch (e) {
     st('rs2', 'err', e.message);
     document.getElementById('rb').disabled = false;
