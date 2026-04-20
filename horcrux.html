@@ -348,6 +348,7 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
   <div class="sec-hd">1. Shard Handling</div>
   <div class="fi"><label>Threshold (k)</label><input type="number" id="rt" value="3" min="2" max="20" onchange="bsh()" style="max-width:120px"></div>
   <div class="fi"><label>Shard strings</label>
+    <p style="font-size:13px;color:#666;margin:-2px 0 8px;line-height:1.5">Paste each holder&rsquo;s shard into the long box. The short <em>Check</em> box is optional &mdash; if you type in the 6-character Check code printed on that holder&rsquo;s USB, a green <span style="color:var(--accent);font-weight:bold">&#10003;</span> confirms a clean paste and a red <span style="color:var(--red);font-weight:bold">&#10007;</span> flags a typo before you combine.</p>
     <div id="rs"></div>
     <button class="btn g" style="margin-top:6px;font-size:13px;padding:6px 14px" onclick="ash()">+ Add shard</button>
   </div>
@@ -632,6 +633,13 @@ HOW TO RECOVER THE FILES
       line into one of the "Shard strings" boxes in the
       browser. Do this for each holder's file.
 
+      OPTIONAL but recommended: also type the 6-character
+      "Check code" from that USB's restore_instructions.txt
+      into the small "Check" box next to the shard. A green
+      check mark means the shard was typed correctly; a red X
+      means there's a typo and you should fix it now. Leave
+      the Check box empty if you don't have the code handy.
+
    d) Click "Combine Shards". You should see a passphrase of
       five words separated by hyphens appear (like
       "word-word-word-word-word"). If you see an error
@@ -650,14 +658,18 @@ HOW TO RECOVER THE FILES
 
 THIS USB'S KEY PIECE   (do not share, do not lose)
 
-   ${shard}
+   Shard string:   ${shard}
 
-   Check code:   ${checkCode}
+   Check code:     ${checkCode}
 
-   At recovery time, the tool displays a 6-character Check code
-   next to each shard as it is typed in. If the code the tool
-   shows matches the one above, the shard was typed correctly.
-   If it doesn't match, double-check for typos before continuing.
+   The Check code is a short safety tag for the shard above. At
+   recovery time, the tool has a small "Check" box next to each
+   shard. If you type the Check code shown above into that box:
+     - a green check mark appears if the shard was typed correctly
+     - a red X appears if there's a typo in the shard (or in the
+       Check code itself)
+   The Check box is optional -- you can leave it empty. The
+   recovery still works; you just lose the typo warning.
 
 
 WHAT IF...
