@@ -144,6 +144,10 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
         <li>fflate.js</li>
       </ul>
       Total size about 225&nbsp;KB &mdash; negligible on any USB drive.
+      <div id="dl-offline-bundle" style="display:none;margin-top:10px">
+        <button class="btn g" onclick="downloadOfflineBundle(this)" style="font-size:13px;padding:6px 14px">Download all 5 files + hashes as a zip</button>
+        <span style="font-size:12px;color:#888;margin-left:8px">one-click bundle of this online copy, with <code>SHA256SUMS</code> for verification</span>
+      </div>
     </li>
   </ol>
 
@@ -724,6 +728,99 @@ function _downloadBlob(data, filename, mime) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+// ── Offline-bundle download ──
+// Served from a web host, the visitor can click one button to download
+// a zip of every tool file + SHA256SUMS + a plain-English README for
+// USB distribution. Hidden when the page is already running from file://
+// (in which case the visitor HAS the files already).
+
+const _OFFLINE_README = `HORCRUX - OFFLINE USE
+=====================
+
+This folder contains everything needed to run Horcrux on any computer
+without an internet connection.
+
+TO USE THE TOOL
+---------------
+
+1. Keep all files in the same folder.
+2. Double-click "horcrux.html". It opens in your web browser.
+3. If double-click does not work, right-click "horcrux.html", choose
+   "Open with", and pick any web browser (Chrome, Edge, Firefox, Safari).
+
+No internet connection needed. No installation needed.
+
+
+TO VERIFY THIS IS A GENUINE COPY
+--------------------------------
+
+The file "SHA256SUMS" lists the expected SHA-256 hash of every tool
+file. If you compute the hash of each file and the values match,
+this copy has not been tampered with.
+
+On Windows (PowerShell):
+    Get-FileHash horcrux.html -Algorithm SHA256
+
+On macOS / Linux:
+    shasum -a 256 horcrux.html
+
+The canonical SHA256SUMS is always published at:
+    https://horcrux.nighconfused.com/SHA256SUMS
+
+If your local hashes match the canonical file, this copy is genuine.
+If they do not match, discard this copy and re-download from the
+canonical URL.
+
+
+WHAT IS HORCRUX?
+----------------
+
+A tool for digital estate planning. It encrypts a folder of files,
+splits the unlock key into pieces, and lets any K-of-N trusted
+people combine their pieces to recover the files.
+
+Full walkthrough: open "horcrux.html" in your browser and read the
+Guide tab.
+
+Source code: https://github.com/Provoking9867/Horcrux-Web
+`;
+
+async function downloadOfflineBundle(btn) {
+  // Files fetched from the same origin serving this page.
+  // If any of these 404 (e.g., SHA256SUMS missing on a dev host), we
+  // surface the failure rather than silently producing a half-bundle.
+  const files = [
+    'horcrux.html', 'horcrux-core.js', 'diceware.js',
+    'eff_wordlist.js', 'fflate.js',
+    'SHA256SUMS', 'README.md'
+  ];
+
+  const origLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Preparing download\u2026';
+
+  try {
+    const entries = {};
+    await Promise.all(files.map(async name => {
+      const resp = await fetch(name, { cache: 'no-store' });
+      if (!resp.ok) throw new Error(`${name}: HTTP ${resp.status}`);
+      entries[name] = new Uint8Array(await resp.arrayBuffer());
+    }));
+
+    entries['README-OFFLINE.txt'] = new TextEncoder().encode(_OFFLINE_README);
+
+    const zip = fflate.zipSync(entries, { level: 6 });
+    _downloadBlob(zip, 'Horcrux-Web-offline.zip', 'application/zip');
+
+    btn.textContent = '\u2713 Downloaded \u2014 click to download again';
+    btn.disabled = false;
+  } catch (e) {
+    console.error('Offline bundle download failed:', e);
+    btn.textContent = 'Download failed \u2014 see browser console';
+    setTimeout(() => { btn.textContent = origLabel; btn.disabled = false; }, 4000);
+  }
+}
+
 // ── diceware sanity check (wrong shards produce random-looking garbage) ──
 let _dicewareSet = null;
 function _looksLikeDiceware(pp) {
@@ -975,6 +1072,16 @@ async function doRecover() {
 
 // init
 bsh();
+
+// Reveal the "Download all 5 files as zip" button only when the page is
+// served from a web host (http: or https:). If the page is being run
+// from a USB or local folder (file:) the visitor already has the files
+// and the button would fail anyway (browsers block fetch() of siblings
+// on file:// due to CORS).
+if (location.protocol === 'http:' || location.protocol === 'https:') {
+  const dl = document.getElementById('dl-offline-bundle');
+  if (dl) dl.style.display = 'block';
+}
 </script>
 </body>
 </html>
