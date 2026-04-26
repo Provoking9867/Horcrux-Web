@@ -166,6 +166,16 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
   </ol>
   <div class="note">If the tool shows an orange <em>&ldquo;Legacy vault format&rdquo;</em> message after a successful recovery, the vault was created by an older version. The files came through fine &mdash; but consider creating a new vault with the recovered files to upgrade to the authenticated Horcrux1 format.</div>
 
+  <h2>Who should hold each shard?</h2>
+  <p>There is no single right answer, but for digital estate planning a practical pattern is:</p>
+  <ul>
+    <li><strong>One shard for yourself</strong> &mdash; home safe, safe-deposit box, or a sealed envelope with your will. Alone it cannot unlock anything.</li>
+    <li><strong>One shard for your executor or attorney</strong> &mdash; include a cover letter explaining what the USB is and what circumstances justify opening the vault.</li>
+    <li><strong>Remaining shards to trusted family members or close friends</strong> &mdash; people who will outlive you and who you trust not to collude to open the vault prematurely.</li>
+  </ul>
+  <p>You do not have to decide shard destinations at creation time. Create the shards first, then hand them out as you determine the right people. You do not need to tell any shard holder who holds the others &mdash; the threshold design means no single person needs to know the full picture.</p>
+  <p><strong>Keep a written record for yourself</strong> (separate from the shard folders) of who received which shard. A printed note stored with your estate documents is appropriate &mdash; something as simple as &ldquo;Vault ESTATE-2026: Shard 1 &rarr; attorney Jane Smith, Shard 2 &rarr; brother Mike, Shard 3 &rarr; home safe.&rdquo; This is the creator&rsquo;s reference, not the holders&rsquo;. The vault itself is safe to store anywhere (cloud, email, USB) &mdash; it is unreadable without the key.</p>
+
   <h2>After distribution &mdash; deleting the originals</h2>
   <p>Once you have confirmed that your vault was created correctly and each shard holder has their USB drive, you should delete the shard folders from your computer. They contain copies of the encrypted vault and are not needed locally.</p>
   <p>Use your operating system&rsquo;s standard delete. The shard folders do <em>not</em> contain your original files &mdash; only the encrypted vault and the shard string, which is useless without the others.</p>
@@ -275,6 +285,14 @@ hr{border:none;border-top:1px solid var(--rule);margin:20px 0}
   <h2>Compatibility</h2>
   <p>Shard strings (Shamir split/combine) remain interchangeable with the Python edition (<code>horcrux.py</code>). Vault ciphertext is <strong>no longer interchangeable</strong>: this edition emits the authenticated <code>Horcrux1</code> format, which <code>horcrux.py</code> v1.2 cannot decrypt. Legacy <code>Salted__</code> vaults written by <code>horcrux.py</code> remain readable here (with a UI warning).</p>
   <p>Shards are <strong>not compatible</strong> with B. Poettering&rsquo;s <code>ssss-split</code>/<code>ssss-combine</code> tools due to differences in polynomial structure (monic vs. random leading coefficient) and byte serialization order in the XTEA diffusion layer.</p>
+
+  <h2>Known Limitations</h2>
+
+  <h3>Memory zeroing</h3>
+  <p>JavaScript provides no facility to zero sensitive memory on demand. The passphrase, AES key material, and decrypted plaintext remain allocated until the browser&rsquo;s garbage collector reclaims them &mdash; which is non-deterministic. On a shared or potentially compromised machine, this data may be observable in RAM for an indeterminate period after the tab finishes processing. <strong>Mitigation:</strong> close the Horcrux tab immediately after recovering files, and avoid running Horcrux on untrusted or shared machines.</p>
+
+  <h3>File size</h3>
+  <p>All vault contents are processed in memory as JavaScript <code>ArrayBuffer</code> objects. Practical limits depend on the device: archives under ~100&nbsp;MB work reliably on most desktop browsers; larger archives may exhaust the tab&rsquo;s memory budget and produce a browser-level error. <strong>Recommended approach:</strong> zip the files externally into a single archive before using Horcrux, keeping the archive under 100&nbsp;MB. Very large digital estates can be split across multiple independent vaults, each with a distinct Vault ID, passphrase, and shard set.</p>
 
   <h2>Credits &amp; References</h2>
 
@@ -856,13 +874,19 @@ function doCombine() {
   try {
     const pp = HorcruxCore.joinSecret(shards, k);
     if (!pp) throw new Error('Could not reconstruct passphrase. Check shard strings and threshold count.');
-    if (!_looksLikeDiceware(pp)) {
-      document.getElementById('ckr').style.display = 'none';
-      throw new Error('Could not reconstruct the passphrase. Check the shard strings and threshold.');
-    }
     document.getElementById('ckv').textContent = pp;
     document.getElementById('ckr').style.display = 'block';
-    st('cbs', 'ok', 'Passphrase reconstructed successfully.');
+    if (_looksLikeDiceware(pp)) {
+      st('cbs', 'ok', 'Passphrase reconstructed successfully.');
+    } else {
+      // Advisory only — the passphrase doesn't match the EFF wordlist format, but
+      // the cryptographic gate is HMAC in vaultDecrypt(), not this check.
+      // A non-diceware passphrase (e.g. custom format) will still unlock the vault
+      // correctly if the shards are right.
+      st('cbs', 'warn', 'Shards combined \u2014 but the result doesn\u2019t look like a standard diceware passphrase. '
+        + 'If this is unexpected, verify your shard strings and threshold. '
+        + 'If you created this vault with a custom passphrase format, this warning is expected \u2014 proceed to Unlock Vault.');
+    }
   } catch (e) { st('cbs', 'err', e.message); }
 }
 
@@ -952,6 +976,8 @@ async function doRecover() {
     // Try every k-subset of supplied shards until one decrypts + unzips.
     // Tolerates one (or more) mistyped shard when the user supplies extras.
     let pp = null, zipBytes = null, entries = null, lastErr = null, tried = 0;
+    // TODO: when SUBSET_CAP is hit, compute C(n,k) and report "tried X of Y total subsets" so users
+    // with many shards (e.g. 20-of-20) get a meaningful error rather than a blind cap message.
     const SUBSET_CAP = 500;
     st('rs2', 'inf', '<span class="sp"></span>Trying shard combinations\u2026');
     for (const subset of kCombinations(shards, k)) {
